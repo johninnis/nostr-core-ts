@@ -1,6 +1,7 @@
 import type { PublicKey } from "./public-key.ts"
 import { isValidPublicKey } from "./public-key.ts"
 
+/** NIP-01 addressable-event coordinate `(kind, pubkey, d-tag)` — the value-object form of an `a`-tag value or `naddr` payload. */
 export interface AddressableEventRef {
   readonly kind: number
   readonly pubkey: PublicKey

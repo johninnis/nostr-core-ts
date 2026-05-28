@@ -4,6 +4,7 @@ import { hexRegex } from "./hex.ts"
 /** Nominal-type primitive: `Brand<typeof someUniqueSymbol, string>` is a `string` that no plain string can be assigned to. */
 export type Brand<TBrand extends symbol, TBase = string> = TBase & { readonly [K in TBrand]: TBrand }
 
+/** Configuration for `createBrand`: the brand's error class name, the message prefix, a validator, and an optional pre-validation normaliser (defaults to `toLowerCase`). */
 export interface BrandSpec<TName extends string> {
   readonly errorName: TName
   readonly errorPrefix: string
@@ -11,6 +12,7 @@ export interface BrandSpec<TName extends string> {
   readonly normalise?: (raw: string) => string
 }
 
+/** The four exports `createBrand` / `createHexBrand` produce: `parse`, `isValid`, `tryParse`, and the brand's `InvalidError` constructor. */
 export interface BrandTools<T, TName extends string> {
   /** Validate `raw`, normalise it, and return the branded form. Throws `InvalidError` on failure. */
   readonly parse: (raw: string) => T
@@ -50,6 +52,7 @@ export const createBrand = <T, TName extends string>(spec: BrandSpec<TName>): Br
   return { parse, isValid, tryParse, InvalidError }
 }
 
+/** Configuration for `createHexBrand`: like `BrandSpec` but with `hexLength` instead of `validate` (the regex is built automatically). */
 export interface HexBrandSpec<TName extends string> {
   readonly errorName: TName
   readonly errorPrefix: string

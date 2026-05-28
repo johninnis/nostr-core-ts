@@ -7,6 +7,7 @@ import { isValidPublicKey } from "../../domain/value-object/public-key.ts"
 /** Lookup defaults to 10 s — well-known endpoints that take longer are almost always stalled. */
 export const DEFAULT_NIP05_TIMEOUT_MS = 10_000
 
+/** Options accepted by `resolveNip05` — lookup timeout and an optional `AbortSignal`. */
 export interface ResolveNip05Options {
   /** Hard ceiling on the lookup, in milliseconds. Defaults to {@link DEFAULT_NIP05_TIMEOUT_MS}. */
   readonly timeoutMs?: number

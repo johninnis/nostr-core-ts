@@ -1,6 +1,7 @@
 import { TaggedError } from "../../domain/exception/tagged-error.ts"
 import type { Result } from "../../domain/value-object/result.ts"
 
+/** Input shape for `HttpClient.request` — URL, method, optional headers/body, and optional abort controls (`timeoutMs` + `signal`). */
 export interface HttpRequest {
   readonly url: string
   readonly method: string
@@ -21,6 +22,7 @@ export interface HttpRequest {
   readonly signal?: AbortSignal
 }
 
+/** Successful response shape returned by `HttpClient.request` — `status`, `headers`, and three lazy single-shot body readers (`json`, `text`, `blob`) that surface stream/parse failures as `Failure(NetworkError)` rather than throwing. */
 export interface HttpResponse {
   readonly status: number
   readonly headers: Headers
@@ -60,6 +62,7 @@ export class ServerError extends TaggedError<"ServerError"> {
   }
 }
 
+/** Failure surface of `HttpClient.request` — `NetworkError` for transport-level faults (DNS, abort, TLS), `ServerError` for HTTP status `>= 400`. */
 export type HttpRequestError = NetworkError | ServerError
 
 /**

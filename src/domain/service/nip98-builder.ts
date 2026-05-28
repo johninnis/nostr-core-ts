@@ -11,6 +11,7 @@ export const DEFAULT_AUTH_EXPIRATION_SECONDS = 60
 /** Prefix marking a NIP-98 `Authorization` header value; the bytes after it are base64-encoded JSON. */
 export const NIP98_AUTH_HEADER_PREFIX = "Nostr "
 
+/** Input for `buildNip98AuthEvent` — request URL, HTTP method, optional body (hashed into a `payload` tag when present), and optional expiry / pinned-`created_at` overrides. */
 export interface BuildNip98AuthEventInput {
   readonly url: string
   readonly method: string

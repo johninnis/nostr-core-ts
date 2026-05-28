@@ -1,5 +1,6 @@
 import { KIND_CONTACT_LIST, KIND_GENERIC_REPOST, KIND_METADATA, KIND_REPOST } from "../value-object/kinds.ts"
 
+/** The two NIP-18 repost kinds: `KIND_REPOST` (kind 6, kind-1 reposts) and `KIND_GENERIC_REPOST` (kind 16, all other kinds). */
 export const REPOST_KINDS: ReadonlyArray<number> = [KIND_REPOST, KIND_GENERIC_REPOST]
 
 const REPLACEABLE_RANGE_START = 10000

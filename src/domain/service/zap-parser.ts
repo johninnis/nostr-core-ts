@@ -45,6 +45,7 @@ export const parseAmountSats = (tags: ReadonlyArray<Tag>): number | null => {
   return bolt11Value ? parseBolt11Amount(bolt11Value) : null
 }
 
+/** Parsed-zap shape returned by `parseZapReceipt` and `parseNutzap` — payer pubkey (branded plus `npub` form), amount in sats, optional message, and the receipt's `created_at`. */
 export interface ZapInfo {
   readonly pubkey: PublicKey
   readonly npub: string

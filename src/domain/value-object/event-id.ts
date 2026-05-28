@@ -3,6 +3,7 @@ import { createHexBrand } from "./brand.ts"
 
 declare const eventIdBrand: unique symbol
 
+/** Branded 64-char lowercase-hex SHA-256 NIP-01 event id. Construct via `parseEventId` or `computeEventId`. */
 type EventId = Brand<typeof eventIdBrand>
 
 const eventIdTools: BrandTools<EventId, "InvalidEventIdError"> = createHexBrand({

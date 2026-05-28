@@ -64,9 +64,13 @@ const tlvFindEntry = (
 const tlvExtractRelays = (entries: ReadonlyArray<TlvEntry>): ReadonlyArray<string> =>
   entries.filter((e) => e.type === 1).map((e) => decodeBytes(e.value))
 
+/** Decoded NIP-19 `npub1…` payload — carries the already-branded `PublicKey`. */
 type DecodedNpub = { readonly type: "npub"; readonly pubkey: PublicKey }
+/** Decoded NIP-19 `note1…` payload — carries the already-branded `EventId`. */
 type DecodedNote = { readonly type: "note"; readonly eventId: EventId }
+/** Decoded NIP-19 `nprofile1…` payload — pubkey plus optional relay hints (TLV type 1). */
 type DecodedNprofile = { readonly type: "nprofile"; readonly pubkey: PublicKey; readonly relays: ReadonlyArray<string> }
+/** Decoded NIP-19 `nevent1…` payload — event id plus optional relay hints, author pubkey, and kind. */
 type DecodedNevent = {
   readonly type: "nevent"
   readonly eventId: EventId
@@ -74,6 +78,7 @@ type DecodedNevent = {
   readonly pubkey: PublicKey | null
   readonly kind: number | null
 }
+/** Decoded NIP-19 `naddr1…` payload — addressable-event coordinate (`kind` + `pubkey` + `dTag`) plus optional relay hints. */
 type DecodedNaddr = {
   readonly type: "naddr"
   readonly dTag: string
@@ -82,6 +87,7 @@ type DecodedNaddr = {
   readonly kind: number
 }
 
+/** Discriminated union returned by `decodeNostrEntity` — branch on `.type` to access the entity-specific fields. */
 type DecodedEntity = DecodedNpub | DecodedNote | DecodedNprofile | DecodedNevent | DecodedNaddr
 
 /** Decode a NIP-19 bech32 entity (`npub`, `note`, `nprofile`, `nevent`, `naddr`); `nostr:` prefix is tolerated. */
@@ -186,6 +192,7 @@ export const encodeNprofile = (pubkey: PublicKey, relayUrls: ReadonlyArray<strin
 const encodeBigEndian32 = (value: number): Uint8Array =>
   new Uint8Array([(value >> 24) & 0xff, (value >> 16) & 0xff, (value >> 8) & 0xff, value & 0xff])
 
+/** Options for `encodeNevent` — relay hints (TLV type 1), optional author pubkey (TLV type 2), and optional kind (TLV type 3). */
 export interface EncodeNeventOptions {
   readonly relayUrls?: ReadonlyArray<string>
   readonly authorPubkey?: PublicKey | null

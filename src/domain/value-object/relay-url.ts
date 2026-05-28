@@ -6,6 +6,7 @@ import { createBrand } from "./brand.ts"
 
 declare const relayUrlBrand: unique symbol
 
+/** Branded canonical relay URL (`ws://` or `wss://`, lowercased scheme/host, no trailing slash). Construct via `parseRelayUrl` or `normaliseRelayUrl`. */
 export type RelayUrl = Brand<typeof relayUrlBrand>
 
 const WSS_REGEX = /^wss?:\/\/.+/

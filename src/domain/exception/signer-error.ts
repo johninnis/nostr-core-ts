@@ -1,5 +1,6 @@
 import { TaggedError } from "./tagged-error.ts"
 
+/** Discriminator for `SignerError.tag` — the four switchable sub-reasons a `Signer.nipNN*` crypto call can fail (no signer wired, transport disconnected, decrypt/encrypt failure). */
 export type SignerErrorTag =
   | "no-signer"
   | "disconnected"

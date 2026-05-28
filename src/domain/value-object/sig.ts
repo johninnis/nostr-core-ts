@@ -3,6 +3,7 @@ import { createHexBrand } from "./brand.ts"
 
 declare const sigBrand: unique symbol
 
+/** Branded 128-char lowercase-hex Schnorr signature (NIP-01 `sig`). Construct via `parseSig`. */
 type Sig = Brand<typeof sigBrand>
 
 const sigTools: BrandTools<Sig, "InvalidSigError"> = createHexBrand({

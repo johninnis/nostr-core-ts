@@ -1,5 +1,6 @@
 import { TaggedError } from "./tagged-error.ts"
 
+/** Discriminator for `JsonCryptoError.tag` — JSON serialise failed, JSON parse failed, ciphertext was empty, or the underlying signer's `nip44*` call returned `Failure`. */
 export type JsonCryptoErrorTag =
   | "json-stringify-failed"
   | "json-parse-failed"

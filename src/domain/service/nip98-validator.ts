@@ -35,10 +35,12 @@ const parseAndLowercaseUrl = (raw: string): URL | null => {
   }
 }
 
+/** Replay-protection contract the validator depends on — `recordOnce` returns `true` on first sight of `eventId` and `false` on every subsequent sighting within `ttlSeconds`. */
 export interface Nip98ReplayGuard {
   readonly recordOnce: (eventId: EventId, ttlSeconds: number) => Promise<boolean>
 }
 
+/** Configuration accepted by `createNip98Validator` — required replay guard, optional clock skew tolerance (seconds), and optional clock override. */
 export interface Nip98ValidatorOptions {
   readonly replayGuard: Nip98ReplayGuard
   readonly timestampTolerance?: number
@@ -46,6 +48,7 @@ export interface Nip98ValidatorOptions {
   readonly clock?: Clock
 }
 
+/** Input to `Nip98Validator.validate` — the already-parsed event plus the request context (URL, method, optional precomputed body hash). */
 export interface ValidateEventRequest {
   readonly event: NostrEvent
   readonly url: string
@@ -53,6 +56,7 @@ export interface ValidateEventRequest {
   readonly bodyHash?: string
 }
 
+/** Input to `Nip98Validator.validateAuthHeader` — the raw `Authorization: Nostr <base64>` header plus the request context. The body (if any) is hashed by the validator. */
 export interface ValidateAuthHeaderRequest {
   readonly authHeader: string
   readonly url: string
@@ -60,6 +64,7 @@ export interface ValidateAuthHeaderRequest {
   readonly body: string
 }
 
+/** Validator returned by `createNip98Validator` — two entry points (already-parsed event, or raw `Authorization` header) that resolve to the verified `PublicKey` on success. */
 export interface Nip98Validator {
   readonly validate: (req: ValidateEventRequest) => Promise<Result<PublicKey, Nip98ValidationError>>
   readonly validateAuthHeader: (req: ValidateAuthHeaderRequest) => Promise<Result<PublicKey, Nip98ValidationError>>

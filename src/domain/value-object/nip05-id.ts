@@ -3,6 +3,7 @@ import { createBrand } from "./brand.ts"
 
 declare const nip05IdBrand: unique symbol
 
+/** Branded NIP-05 identifier in canonical `name@domain.tld` form (lowercased, regex-validated). Construct via `parseNip05Id`. */
 type Nip05Id = Brand<typeof nip05IdBrand>
 
 const NIP05_ID_REGEX = /^[a-z0-9._-]+@[a-z0-9.-]+\.[a-z]{2,}$/

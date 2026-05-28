@@ -3,6 +3,7 @@ import { createHexBrand } from "./brand.ts"
 
 declare const publicKeyBrand: unique symbol
 
+/** Branded 64-char lowercase-hex secp256k1 x-only public key (NIP-01 `pubkey`). Construct via `parsePublicKey`. */
 type PublicKey = Brand<typeof publicKeyBrand>
 
 const publicKeyTools: BrandTools<PublicKey, "InvalidPublicKeyError"> = createHexBrand({

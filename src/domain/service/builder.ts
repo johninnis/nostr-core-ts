@@ -70,6 +70,7 @@ const extractReferenceTags = (content: string): ReadonlyArray<Tag> => {
   return tags
 }
 
+/** Threading context for `buildTextNote` — the parent event and (optionally) the thread root plus any pubkeys to keep in the conversation. */
 interface ReplyContext {
   readonly replyToId: EventId
   readonly replyToAuthorPubkey: PublicKey
@@ -159,6 +160,7 @@ interface EventDeletionTarget {
   readonly kind: number
 }
 
+/** Target shape accepted by `buildDeletion` — either a single event id with its kind, or an addressable-event coordinate (NIP-09). */
 export type DeletionTarget = EventDeletionTarget | AddressableEventRef
 
 /** Build a kind-5 deletion event for either a single event or an addressable coordinate (NIP-09). */
@@ -210,6 +212,7 @@ export const buildZapRequest = (
   return { kind: KIND_ZAP_REQUEST, created_at: now(), tags, content: comment }
 }
 
+/** Input for `buildLongform` — NIP-23 long-form article metadata. `kind` is the caller's choice (typically `KIND_LONGFORM` or `KIND_LONGFORM_DRAFT`); `dTag` is the addressable-event identifier. */
 interface BuildLongformInput {
   readonly kind: number
   readonly dTag: string

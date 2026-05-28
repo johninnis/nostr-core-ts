@@ -9,6 +9,7 @@ import { isValidPublicKey } from "../value-object/public-key.ts"
 import { isValidSig } from "../value-object/sig.ts"
 import { decodeNostrEntity, stripNostrUriPrefix } from "./bech32.ts"
 
+/** Result shape of `parseNostrInput` — at most one of `eventId` / `pubkey` / `naddr` is set, plus any relay hints carried by the source NIP-19 entity. */
 export interface ParsedNostrInput {
   readonly eventId?: EventId
   readonly pubkey?: PublicKey
@@ -68,8 +69,10 @@ const FIELD_CHECKS = [
   ["sig", isValidSig],
 ] as const
 
+/** Literal-union of the seven NIP-01 event field names checked by `validateEventStructure`. */
 export type EventStructureField = typeof FIELD_CHECKS[number][0]
 
+/** One row of `validateEventStructure`'s output: which field, did it pass, and the raw value seen at that key (typed `unknown` because the input is an arbitrary record). */
 export interface EventStructureCheck {
   readonly field: EventStructureField
   readonly passed: boolean

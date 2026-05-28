@@ -1,5 +1,8 @@
+/** Success branch of a `Result<T, E>`: carries the value under `.value`, discriminator `.success === true`. */
 export type Success<T> = { readonly success: true; readonly value: T }
+/** Failure branch of a `Result<T, E>`: carries the error under `.error`, discriminator `.success === false`. */
 export type Failure<E> = { readonly success: false; readonly error: E }
+/** Discriminated success/failure union returned by every operation in this library whose failure is expected (rather than exceptional). */
 export type Result<T, E> = Success<T> | Failure<E>
 
 /** Wrap `value` in a `Success` Result. */

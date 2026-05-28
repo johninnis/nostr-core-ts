@@ -7,8 +7,10 @@ import { encryptJson } from "./json-crypto.ts"
 import { EncryptionError } from "../exception/encryption-error.ts"
 import { getTagValue } from "./tags.ts"
 
+/** Which half of a NIP-51 list is being modified — `"public"` mutates the event's `tags` array; `"private"` mutates the decrypted entries in `content`. */
 export type ListVisibility = "public" | "private"
 
+/** Input for `buildReplaceableListEvent` — current public/private tag arrays, a transform to apply to one half (selected by `visibility`), and a signer to encrypt private entries with. */
 export interface BuildReplaceableListEventInput {
   readonly kind: number
   readonly dTag?: string
@@ -22,6 +24,7 @@ export interface BuildReplaceableListEventInput {
   readonly createdAt: number
 }
 
+/** Successful (non-null) output of `buildReplaceableListEvent` — the new unsigned event template to hand to a signer, plus the resulting private-tags array (carried through unchanged for `"public"` mutations). */
 export interface BuildReplaceableListEventResult {
   readonly template: UnsignedEvent
   readonly nextPrivateTags: ReadonlyArray<Tag>

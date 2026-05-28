@@ -1,5 +1,6 @@
 import { TaggedError } from "./tagged-error.ts"
 
+/** Thrown by signer adapters (e.g. NIP-07, NIP-46) when the user explicitly rejects a signing or encryption request. Distinguishes user denial from other failure modes (transport, network, etc.). */
 export class SignerRejectedError extends TaggedError<"SignerRejectedError"> {
   constructor(message = "User rejected the request", cause?: unknown) {
     super("SignerRejectedError", message, cause)

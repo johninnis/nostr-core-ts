@@ -26,6 +26,7 @@ import { DEFAULT_REACTION } from "./reaction.ts"
  */
 export type EventOrAddressRef = string
 
+/** Reply-graph view derived from an event's tags — root/reply pointers, mentioned ids/pubkeys, and a `kind`-aware reply flag. */
 interface EventRefs {
   readonly rootEvent: EventOrAddressRef | null
   readonly replyToEvent: EventOrAddressRef | null
@@ -34,16 +35,19 @@ interface EventRefs {
   readonly isReply: boolean
 }
 
+/** Per-kind projection for NIP-18 reposts — the id of the original event being reposted (or `null` if no `e` tag carried a valid id). */
 interface RepostData {
   readonly originalEventId: EventId | null
 }
 
+/** Per-kind projection for NIP-25 reactions — the reaction's wire content and the target event being reacted to. */
 interface ReactionData {
   /** Wire form of the reaction (`event.content`, defaulting to `+` for empty content). Pass through `formatReactionEmoji` to get a display string. */
   readonly content: string
   readonly targetEventId: EventId | null
 }
 
+/** Per-kind projection for NIP-84 highlights — the highlighted text, surrounding context, caller comment, and the source URL or quoted event. */
 interface HighlightData {
   readonly text: string
   readonly context: string | null
@@ -52,6 +56,7 @@ interface HighlightData {
   readonly sourceEventId: EventOrAddressRef | null
 }
 
+/** Per-kind projection for NIP-23 long-form articles — title, summary, image, optional publish timestamp, and topic (`t`) tags. */
 interface LongformData {
   readonly title: string | null
   readonly summary: string | null
@@ -60,6 +65,7 @@ interface LongformData {
   readonly topics: ReadonlyArray<string>
 }
 
+/** Container for the kind-specific projections on `TransformedEvent.kindData` — at most one of the four is set, matching the event's kind. */
 interface KindData {
   readonly repost?: RepostData
   readonly reaction?: ReactionData
@@ -67,6 +73,7 @@ interface KindData {
   readonly longform?: LongformData
 }
 
+/** Result of `transformEvent` — the raw event, its derived reference graph (`refs`), and any kind-specific projection (`kindData`). */
 interface TransformedEvent {
   readonly raw: NostrEvent
   readonly refs: EventRefs

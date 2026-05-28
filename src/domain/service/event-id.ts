@@ -4,6 +4,7 @@ import { parseEventId } from "../value-object/event-id.ts"
 import type { UnsignedEvent } from "../value-object/nostr-event.ts"
 import type { PublicKey } from "../value-object/public-key.ts"
 
+/** Input shape for `computeEventId`: an `UnsignedEvent` plus the author's `pubkey` (the five fields the canonical NIP-01 serialisation hashes). */
 export interface EventToSign extends UnsignedEvent {
   readonly pubkey: PublicKey
 }

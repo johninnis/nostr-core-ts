@@ -1,6 +1,7 @@
 import type { JsonCryptoError } from "../../domain/exception/json-crypto-error.ts"
 import { TaggedError } from "../../domain/exception/tagged-error.ts"
 
+/** Discriminator for `GiftWrapUnwrapError.tag` — covers each structural and cryptographic failure point in the NIP-17 outer/inner unwrap sequence. */
 export type GiftWrapUnwrapErrorTag =
   | "not-gift-wrap"
   | "seal-decrypt-failed"

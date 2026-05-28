@@ -6,6 +6,7 @@ import { now } from "../../domain/value-object/timestamp.ts"
 import type { HttpClient } from "../port/http.ts"
 import { resolveNip05 } from "./nip05-resolver.ts"
 
+/** Dependencies for `createNip05Verifier` — the `HttpClient` port, the result callback, plus optional error sink, clock, abort signal, and per-lookup timeout. */
 export interface Nip05VerifierDeps {
   readonly httpClient: HttpClient
   readonly onVerified: (pubkey: PublicKey, verified: boolean, checkedAt: number) => void
@@ -19,6 +20,7 @@ export interface Nip05VerifierDeps {
   readonly timeoutMs?: number
 }
 
+/** Verifier returned by `createNip05Verifier` — `verify` queues a pubkey/NIP-05 pair for resolution; `whenIdle` resolves when the queue is drained. */
 export interface Nip05Verifier {
   /** Queue a verification of `pubkey`'s claim to `nip05`; idempotent — repeat calls for an already-queued pubkey are no-ops. */
   readonly verify: (pubkey: PublicKey, nip05: Nip05Id) => void

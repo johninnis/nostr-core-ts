@@ -25,10 +25,10 @@ const randomSecondsInWindow = (randomUint32: RandomUint32Fn, windowSeconds: numb
 const jitteredPastTimestamp = (clock: Clock, randomUint32: RandomUint32Fn): number =>
   clock() - randomSecondsInWindow(randomUint32, TWO_DAYS_SECONDS)
 
-// A NIP-17 rumor is an unsigned event with a known author pubkey — structurally identical to an
-// `EventToSign`. Alias rather than duplicate the shape.
+/** A NIP-17 rumor — an unsigned event carrying a known author `pubkey`. Structurally identical to `EventToSign`; aliased rather than duplicated. */
 type Rumor = EventToSign
 
+/** Successful output of `unwrapGiftWrap` — the recovered rumor and the seal-signing pubkey (the actual sender, which `giftWrapEvent.pubkey` deliberately hides). */
 interface UnwrapResult {
   readonly rumor: Rumor
   readonly senderPubkey: PublicKey
@@ -119,6 +119,7 @@ export const unwrapGiftWrap = async (
   return ok({ rumor, senderPubkey: seal.pubkey })
 }
 
+/** One entry of `buildDmGiftWraps`'s output — a signed kind-1059 gift wrap and the recipient pubkey it's addressed to (recipient or sender, since a DM produces two). */
 interface GiftWrapTarget {
   readonly event: NostrEvent
   readonly targetPubkey: PublicKey
@@ -164,6 +165,7 @@ const buildGiftWrapFor = async (
   return ok({ event: giftWrap, targetPubkey })
 }
 
+/** Input for `buildDmGiftWraps` — the user-facing signer, an ephemeral-signer factory + key generator (used for the per-wrap throwaway keys NIP-17 requires), the message content, the recipient pubkey, and the sender's own pubkey. */
 export interface BuildDmGiftWrapsInput {
   readonly signer: Signer
   readonly ephemeralSignerFactory: (secretKey: Uint8Array) => Signer

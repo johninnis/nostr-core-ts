@@ -12,17 +12,22 @@ import { failure, ok } from "../value-object/result.ts"
 import { PrivateEntriesParseError } from "../exception/private-entries-parse-error.ts"
 import type { SignerError } from "../exception/signer-error.ts"
 
+/** Callback shape `decryptPrivateEntries` / `extractFullList` take for NIP-04 / NIP-44 decryption — typically `signer.nip44Decrypt`. */
 type DecryptFn = (pubkey: PublicKey, ciphertext: string) => Promise<Result<string, SignerError>>
 
+/** Failure surface of `decryptPrivateEntries` and `extractFullList` — the signer call failed (`SignerError`) or the decrypted plaintext wasn't a valid JSON array of tags (`PrivateEntriesParseError`). */
 export type PrivateEntriesError = SignerError | PrivateEntriesParseError
 
+/** NIP-65 relay-marker value — `"read"`, `"write"`, or `"both"` (the inferred default when no marker is on the `r` tag). */
 type RelayMarker = "read" | "write" | "both"
 
+/** Normalised entry returned by `extractRelayEntries` — a branded `RelayUrl` and its declared marker. */
 interface RelayEntry {
   readonly url: RelayUrl
   readonly marker: RelayMarker
 }
 
+/** Return shape of `extractFullList` — a NIP-51 list's public tags (from `event.tags`) and decrypted private tags (from `event.content`). */
 interface FullList {
   readonly publicTags: ReadonlyArray<Tag>
   readonly privateTags: ReadonlyArray<Tag>
@@ -83,6 +88,7 @@ export const removePubkeyTag = (tags: ReadonlyArray<Tag>, pubkey: PublicKey): Re
 export const extractEventIds = (tags: ReadonlyArray<Tag>): ReadonlyArray<EventId> =>
   extractTagValues(tags, "e").filter(isValidEventId)
 
+/** Entry returned by `extractEventRefs` — a branded `EventId` and the optional relay hint from the third tag column (omitted if empty). */
 interface EventRef {
   readonly id: EventId
   readonly relayHint?: string
