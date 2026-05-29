@@ -91,6 +91,7 @@ App-specific kind groupings (engagement, profile-metadata, list kinds, etc.) liv
 - `event-id.ts` — `computeEventId({ pubkey, ...unsigned })` performs the canonical NIP-01 serialise + SHA-256 and returns a branded `EventId`. The single sanctioned way to derive an id; `createLocalSigner` uses it so the `LocalSignerTools` bag can stay raw-crypto-only.
 - `transformer.ts` — `transformEvent(event)` returns a normalised view including `refs.isReply`. **This is the ONE way to determine reply-ness** (kinds 1 and 1111 only).
 - `filter.ts` — `matchesFilter(event, filter)`, `matchesAnyFilter(event, filters)`.
+- `filter-hash.ts` — `hashFilters(filters)` returns the canonical identity string for a `REQ` filter set: filter sets that select the same events (differing only in object-key, array-element, or filter order) hash equal, so it is safe as a subscription dedup key. A canonical JSON string, not a digest — wrap in `sha256Hex` for a fixed-length key.
 - `event-utils.ts` — `parseNostrInput(value)`, `buildEventFilter(parsed)` (returns `NostrFilter | null` — `null` when the input resolved to a profile, not an event), `parseNostrEvent(value)` (validates and returns a `NostrEvent` or `null`), `validateEventStructure(event)` returning `ReadonlyArray<EventStructureCheck>` (field-by-field structural diagnostics).
 - `zap-parser.ts` — `parseZapReceipt(event)`, `parseNutzap(event)`, `parseBolt11Amount(invoice)`, `parseAmountSats(tags)`.
 - `verify.ts` — `verifyEventSignature(event)` returns a `Promise<boolean>`; uses `@noble/curves` Schnorr.
