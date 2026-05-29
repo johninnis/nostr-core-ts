@@ -91,7 +91,7 @@ App-specific kind groupings (engagement, profile-metadata, list kinds, etc.) liv
 - `event-id.ts` — `computeEventId({ pubkey, ...unsigned })` performs the canonical NIP-01 serialise + SHA-256 and returns a branded `EventId`. The single sanctioned way to derive an id; `createLocalSigner` uses it so the `LocalSignerTools` bag can stay raw-crypto-only.
 - `transformer.ts` — `transformEvent(event)` returns a normalised view including `refs.isReply`. **This is the ONE way to determine reply-ness** (kinds 1 and 1111 only).
 - `filter.ts` — `matchesFilter(event, filter)`, `matchesAnyFilter(event, filters)`.
-- `filter-hash.ts` — `hashFilters(filters)` returns the canonical identity string for a `REQ` filter set: filter sets that select the same events (differing only in object-key, array-element, or filter order) hash equal, so it is safe as a subscription dedup key. A canonical JSON string, not a digest — wrap in `sha256Hex` for a fixed-length key.
+- `filter-hash.ts` — `hashFilters(filters)` returns the lowercase hex SHA-256 of a `REQ` filter set's canonical form: filter sets that select the same events (differing only in object-key, array-element, or filter order) hash equal, so it is a safe fixed-length subscription dedup key. Synchronous. See [Filter-set hash](#filter-set-hash) for the canonicalisation spec and cross-language parity status.
 - `event-utils.ts` — `parseNostrInput(value)`, `buildEventFilter(parsed)` (returns `NostrFilter | null` — `null` when the input resolved to a profile, not an event), `parseNostrEvent(value)` (validates and returns a `NostrEvent` or `null`), `validateEventStructure(event)` returning `ReadonlyArray<EventStructureCheck>` (field-by-field structural diagnostics).
 - `zap-parser.ts` — `parseZapReceipt(event)`, `parseNutzap(event)`, `parseBolt11Amount(invoice)`, `parseAmountSats(tags)`.
 - `verify.ts` — `verifyEventSignature(event)` returns a `Promise<boolean>`; uses `@noble/curves` Schnorr.
@@ -439,6 +439,29 @@ There is no "RNG Port" — the architecture-purity gain didn't justify the frict
 - **Reimplementing `replaceableStorageKey` / `isReplaceable` / `parseAddressableRef`.** They live here; use them.
 - **Calling `fetch` inside a lib.** Take the `HttpClient` port as a dependency instead — it keeps the lib portable and testable.
 - **Throwing from an `HttpClient` implementation.** Map transport failures to `NetworkError` and return `Result.failure`; callers branch on the `Result` and won't catch a thrown error.
+
+## Filter-set hash
+
+`hashFilters` (TypeScript `@innis/nostr-core`) and `FilterHasher::hash` (PHP `@innis/nostr-core`) compute a stable identity for a NIP-01 `REQ` filter set, suitable as a subscription dedup key. Both follow the same canonicalisation spec:
+
+1. Represent the filter set as an ordered list of filters in wire form (TS: `NostrFilter` objects; PHP: `Filter::toArray()`).
+2. Canonicalise recursively:
+   - **object / map** — sort keys ascending, then canonicalise each value;
+   - **array / list** — canonicalise each element, then sort the elements ascending by their canonical JSON encoding;
+   - **scalar** — left unchanged.
+3. JSON-encode the canonicalised structure compactly, with `/` and non-ASCII left unescaped.
+4. The hash is the lowercase-hex **SHA-256** of that canonical string.
+
+Because object keys, array elements, and the filters themselves are all sorted, two filter sets that select the same events produce the same digest regardless of how they were ordered on input.
+
+### Cross-language parity (status)
+
+Each implementation guarantees the property **within its own runtime**, and the two are byte-identical for all-ASCII inputs — event ids, pubkeys, kinds, and ASCII tag values (for example, both hash the empty set `[]` to `4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945`). Full byte-for-byte parity across every input is **not yet guaranteed**. Known residual divergences:
+
+- an **empty filter** encodes as `{}` (TS) but `[]` (PHP);
+- **element sort order** for non-ASCII values follows UTF-16 code units (TS) versus UTF-8 bytes (PHP).
+
+Until a shared conformance vector set locks byte-parity, do not key a **cross-language shared** cache or store off this digest. For same-runtime dedup — the relay pool's use — it is correct today.
 
 ## Credits
 

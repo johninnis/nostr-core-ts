@@ -1,5 +1,8 @@
+import { sha256 } from "@noble/hashes/sha2"
 import type { NostrFilter } from "../value-object/nostr-filter.ts"
 import { isRecord } from "../value-object/guards.ts"
+import { formatHex } from "../value-object/hex.ts"
+import { textEncoder } from "../value-object/text-codec.ts"
 
 const canonicalise = (value: unknown): unknown => {
   if (Array.isArray(value)) {
@@ -18,9 +21,10 @@ const canonicalise = (value: unknown): unknown => {
 }
 
 /**
- * Canonical identity string for a `REQ` filter set. Two filter sets that select the same events —
- * differing only in object-key order, array-element order, or the order of the filters themselves —
- * produce the same string, so it is safe as a subscription dedup key. The output is a canonical
- * JSON string, not a digest; wrap it in `sha256Hex` if a fixed-length key is wanted.
+ * Lowercase hex SHA-256 of a `REQ` filter set's canonical form. Two filter sets that select the
+ * same events — differing only in object-key order, array-element order, or the order of the
+ * filters themselves — produce the same digest, so it is safe as a fixed-length subscription dedup
+ * key. Synchronous (uses the pure-JS SHA-256) so it can key a subscription map inline.
  */
-export const hashFilters = (filters: ReadonlyArray<NostrFilter>): string => JSON.stringify(canonicalise(filters))
+export const hashFilters = (filters: ReadonlyArray<NostrFilter>): string =>
+  formatHex(sha256(textEncoder.encode(JSON.stringify(canonicalise(filters)))))

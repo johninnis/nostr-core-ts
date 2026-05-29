@@ -1,4 +1,4 @@
-import { assertEquals, assertNotEquals } from "@std/assert"
+import { assertEquals, assertMatch, assertNotEquals } from "@std/assert"
 import { hashFilters } from "../../src/domain/service/filter-hash.ts"
 import type { NostrFilter } from "../../src/domain/value-object/nostr-filter.ts"
 import { parsePublicKey } from "../../src/domain/value-object/public-key.ts"
@@ -42,10 +42,16 @@ Deno.test("hashFilters - treats an explicit undefined field as absent", () => {
   assertEquals(hashFilters([{ kinds: [1], since: undefined }]), hashFilters([{ kinds: [1] }]))
 })
 
-Deno.test("hashFilters - empty filter set hashes to the empty array", () => {
-  assertEquals(hashFilters([]), "[]")
+Deno.test("hashFilters - returns a lowercase hex SHA-256 digest", () => {
+  assertMatch(hashFilters([{ kinds: [1] }]), /^[0-9a-f]{64}$/)
+})
+
+// Pinned digests of the canonical form. These are the cross-language conformance anchors:
+// PHP `FilterHasher::hash` must produce the same digest for the same canonical input.
+Deno.test('hashFilters - empty filter set hashes to SHA-256 of "[]"', () => {
+  assertEquals(hashFilters([]), "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945")
 })
 
 Deno.test("hashFilters - preserves duplicate array elements (equal sort keys)", () => {
-  assertEquals(hashFilters([{ kinds: [1, 1] }]), `[{"kinds":[1,1]}]`)
+  assertNotEquals(hashFilters([{ authors: [authorA, authorA] }]), hashFilters([{ authors: [authorA] }]))
 })
