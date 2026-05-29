@@ -47,6 +47,13 @@ export { verifyEventSignature } from "./verify.ts"
 export { matchesAnyFilter, matchesFilter } from "./filter.ts"
 export { byCreatedAtAsc, byCreatedAtDesc } from "./sort.ts"
 
+export {
+  serialiseAuthMessage,
+  serialiseCloseMessage,
+  serialiseEventMessage,
+  serialiseReqMessage,
+} from "./client-message.ts"
+
 export { isParameterisedReplaceable, isReplaceable, isRepostKind, REPOST_KINDS } from "./kinds.ts"
 export { replaceableStorageKey } from "./replaceable.ts"
 

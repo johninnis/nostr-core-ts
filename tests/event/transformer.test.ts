@@ -299,6 +299,57 @@ Deno.test("transformEvent - comment with uppercase E-tag sets rootEvent", () => 
   assertEquals(result.refs.rootEvent, eid2)
 })
 
+Deno.test("transformEvent - short note quoting via q tag with unmarked e tag is not a reply", () => {
+  const raw = makeEvent({
+    kind: KIND_SHORT_NOTE,
+    tags: [["q", eid2], ["e", eid2]],
+  })
+  const result = transformEvent(raw)
+  assertEquals(result.refs.isReply, false)
+  assertEquals(result.refs.rootEvent, null)
+  assertEquals(result.refs.replyToEvent, null)
+  assertEquals(result.refs.mentionedEvents.includes(eid2), true)
+})
+
+Deno.test("transformEvent - short note quoting via q tag with mention-marked e tag is not a reply", () => {
+  const raw = makeEvent({
+    kind: KIND_SHORT_NOTE,
+    tags: [["q", eid2], ["e", eid2, "", "mention"], ["p", pk2]],
+  })
+  const result = transformEvent(raw)
+  assertEquals(result.refs.isReply, false)
+})
+
+Deno.test("transformEvent - reply that also quotes another note stays a reply with the quote excluded", () => {
+  const raw = makeEvent({
+    kind: KIND_SHORT_NOTE,
+    tags: [["e", eid2], ["q", eid3], ["e", eid3]],
+  })
+  const result = transformEvent(raw)
+  assertEquals(result.refs.isReply, true)
+  assertEquals(result.refs.rootEvent, eid2)
+  assertEquals(result.refs.replyToEvent, null)
+})
+
+Deno.test("transformEvent - reply with explicit markers that also quotes is unaffected", () => {
+  const raw = makeEvent({
+    kind: KIND_SHORT_NOTE,
+    tags: [["e", eid2, "", "root"], ["q", eid3], ["e", eid3, "", "mention"]],
+  })
+  const result = transformEvent(raw)
+  assertEquals(result.refs.isReply, true)
+  assertEquals(result.refs.rootEvent, eid2)
+})
+
+Deno.test("transformEvent - comment quoting via q tag does not treat the quote as its parent", () => {
+  const raw = makeEvent({
+    kind: KIND_COMMENT,
+    tags: [["e", eid2], ["q", eid3], ["e", eid3]],
+  })
+  const result = transformEvent(raw)
+  assertEquals(result.refs.replyToEvent, eid2)
+})
+
 Deno.test("transformEvent - unknown kind returns empty kindData", () => {
   const raw = makeEvent({ kind: 99999 })
   const result = transformEvent(raw)

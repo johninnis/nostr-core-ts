@@ -96,6 +96,11 @@ const buildRefs = (raw: NostrEvent): EventRefs => {
   const mentionedPubkeys: Array<string> = []
   let hasExplicitMarkers = false
 
+  const quotedEventIds = new Set<string>()
+  for (const tag of tags) {
+    if (tag[0] === "q" && tag[1]) quotedEventIds.add(tag[1])
+  }
+
   for (const tag of tags) {
     if (!tag[0] || !tag[1]) continue
 
@@ -103,7 +108,7 @@ const buildRefs = (raw: NostrEvent): EventRefs => {
       rootEvent = tag[1]
     } else if (tag[0] === "e") {
       if (isComment) {
-        replyToEvent = tag[1]
+        if (!quotedEventIds.has(tag[1])) replyToEvent = tag[1]
       } else {
         const marker = tag[3] ?? null
         if (marker) hasExplicitMarkers = true
@@ -134,8 +139,9 @@ const buildRefs = (raw: NostrEvent): EventRefs => {
   }
 
   if (!isComment && !hasExplicitMarkers) {
-    if (!rootEvent && eTags.length > 0) rootEvent = eTags[0] ?? null
-    if (!replyToEvent && eTags.length > 1) replyToEvent = eTags[eTags.length - 1] ?? null
+    const threadETags = eTags.filter((id) => !quotedEventIds.has(id))
+    if (!rootEvent && threadETags.length > 0) rootEvent = threadETags[0] ?? null
+    if (!replyToEvent && threadETags.length > 1) replyToEvent = threadETags[threadETags.length - 1] ?? null
     if (!rootEvent && aTagsPositional.length > 0) rootEvent = aTagsPositional[0] ?? null
     if (!replyToEvent && aTagsPositional.length > 1) replyToEvent = aTagsPositional[aTagsPositional.length - 1] ?? null
   }
