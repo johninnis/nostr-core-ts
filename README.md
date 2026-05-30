@@ -456,11 +456,12 @@ Because object keys, array elements, and the filters themselves are all sorted, 
 
 ### Cross-language parity (status)
 
-Each implementation guarantees the property **within its own runtime**, and the two are byte-identical for all-ASCII inputs — event ids, pubkeys, kinds, and ASCII tag values (for example, both hash the empty set `[]` to `4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945`, and both hash a single empty filter `[{}]` to `e10808d43975dc400731053386849f864f297e6c4f7519c380f3dbaf7067a840`). Full byte-for-byte parity across every input is **not yet guaranteed**. Known residual divergence:
+Each implementation guarantees the property **within its own runtime**, and the two are byte-identical for all-ASCII inputs — event ids, pubkeys, kinds, and ASCII tag values (for example, both hash the empty set `[]` to `4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945`, and both hash a single empty filter `[{}]` to `e10808d43975dc400731053386849f864f297e6c4f7519c380f3dbaf7067a840`). Full byte-for-byte parity across every input is **not yet guaranteed**. Both remaining divergences are confined to non-ASCII characters in string-valued fields — the NIP-50 `search` string and tag-filter values; ASCII-only filters are byte-identical. Known residual divergences:
 
-- **element sort order** for non-ASCII values follows UTF-16 code units (TS) versus UTF-8 bytes (PHP).
+- **U+2028 / U+2029 escaping** — PHP's `json_encode` escapes the line- and paragraph-separator code points to `\u2028` / `\u2029` even with `JSON_UNESCAPED_UNICODE`, while TS's `JSON.stringify` emits them raw, so a value containing either yields a different digest.
+- **supplementary-plane (astral) collation** — element- and key-sorting compares by UTF-16 code unit (TS) versus UTF-8 byte (PHP); these disagree for astral characters (e.g. emoji) ordered against the U+E000–U+FFFF range.
 
-Until a shared conformance vector set locks byte-parity, do not key a **cross-language shared** cache or store off this digest. For same-runtime dedup — the relay pool's use — it is correct today.
+Each implementation is still internally order-independent regardless. Until a shared conformance vector set locks byte-parity, do not key a **cross-language shared** cache or store off this digest. For same-runtime dedup — the relay pool's use — it is correct today.
 
 ## Credits
 
