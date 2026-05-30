@@ -54,6 +54,8 @@ export {
   serialiseEventMessage,
   serialiseReqMessage,
 } from "./client-message.ts"
+export { parseRelayMessage } from "./relay-message.ts"
+export type { RelayMessage } from "./relay-message.ts"
 
 export { isParameterisedReplaceable, isReplaceable, isRepostKind, REPOST_KINDS } from "./kinds.ts"
 export { replaceableStorageKey } from "./replaceable.ts"
