@@ -61,6 +61,10 @@ Deno.test("hashFilters - kinds+limit filter matches the cross-language anchor", 
   )
 })
 
+Deno.test("hashFilters - a single empty filter matches the cross-language anchor", () => {
+  assertEquals(hashFilters([{}]), "e10808d43975dc400731053386849f864f297e6c4f7519c380f3dbaf7067a840")
+})
+
 Deno.test("hashFilters - preserves duplicate array elements (equal sort keys)", () => {
   assertNotEquals(hashFilters([{ authors: [authorA, authorA] }]), hashFilters([{ authors: [authorA] }]))
 })

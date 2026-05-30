@@ -456,9 +456,8 @@ Because object keys, array elements, and the filters themselves are all sorted, 
 
 ### Cross-language parity (status)
 
-Each implementation guarantees the property **within its own runtime**, and the two are byte-identical for all-ASCII inputs — event ids, pubkeys, kinds, and ASCII tag values (for example, both hash the empty set `[]` to `4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945`). Full byte-for-byte parity across every input is **not yet guaranteed**. Known residual divergences:
+Each implementation guarantees the property **within its own runtime**, and the two are byte-identical for all-ASCII inputs — event ids, pubkeys, kinds, and ASCII tag values (for example, both hash the empty set `[]` to `4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945`, and both hash a single empty filter `[{}]` to `e10808d43975dc400731053386849f864f297e6c4f7519c380f3dbaf7067a840`). Full byte-for-byte parity across every input is **not yet guaranteed**. Known residual divergence:
 
-- an **empty filter** encodes as `{}` (TS) but `[]` (PHP);
 - **element sort order** for non-ASCII values follows UTF-16 code units (TS) versus UTF-8 bytes (PHP).
 
 Until a shared conformance vector set locks byte-parity, do not key a **cross-language shared** cache or store off this digest. For same-runtime dedup — the relay pool's use — it is correct today.
