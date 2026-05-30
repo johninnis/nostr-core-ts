@@ -124,5 +124,3 @@ export type {
 export { errorMessage, reportUnhandledError } from "./error-utils.ts"
 export { randomBytes, randomUint32 } from "./random.ts"
 export type { RandomBytesFn, RandomUint32Fn } from "./random.ts"
-export { coalesce, debounce } from "./timers.ts"
-export type { CancellableScheduler } from "./timers.ts"

@@ -1,6 +1,6 @@
 # @innis/nostr-core
 
-The foundation. Branded primitives, event utilities, the `Signer` and `HttpClient` interfaces, NIP-19 / NIP-05 encoding, kind constants, a few small async helpers, the `Result` type, and a single `TaggedError` hierarchy every error in the ecosystem extends. Every other `@innis/*` package depends on it.
+The foundation. Branded primitives, event utilities, the `Signer` and `HttpClient` interfaces, NIP-19 / NIP-05 encoding, kind constants, the `Result` type, and a single `TaggedError` hierarchy every error in the ecosystem extends. Every other `@innis/*` package depends on it.
 
 NIP-44 v2 is vendored from [paulmillr/nip44](https://github.com/paulmillr/nip44/) (see [Credits](#credits)); Schnorr / secp256k1 come from `@noble/curves`. `defaultLocalSignerTools` exports a ready-made bag of all of these — drop it straight into `createLocalSigner`, or pass your own `LocalSignerTools` to swap any of them out (hardware signer, alternate NIP-44, etc.).
 
@@ -273,11 +273,9 @@ import {
   Unspecified crypto methods resolve to a `failure(SignerError("no-signer", ...))`. Pass `signEvent`
   to override the default which round-trips through `buildEventFixture`.
 
-### Async helpers — `src/domain/service/timers.ts` + `src/domain/value-object/timestamp.ts`
+### Clock — `src/domain/value-object/timestamp.ts`
 
-- `now()` — current unix seconds. **Use this** instead of `Math.floor(Date.now() / 1000)`.
-- `debounce(fn, ms)` — trailing-edge debounce.
-- `coalesce(fn, ms)` — the first call inside an empty window schedules `fn` to run after `ms`; further calls in the same window are dropped. `fn` is zero-arg, so there is no "trailing call wins" — the schedule is set on the first call and the window resets when it fires. Returns a `CancellableScheduler` with `cancel()`.
+- `now()` — current unix seconds. **Use this** instead of `Math.floor(Date.now() / 1000)`. The `Clock` type (`() => number`) declares a clock-shaped dependency on a builder or service; `now` is the default.
 
 ### Error utilities — `src/domain/service/error-utils.ts`
 
