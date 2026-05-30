@@ -446,22 +446,28 @@ There is no "RNG Port" — the architecture-purity gain didn't justify the frict
 
 1. Represent the filter set as an ordered list of filters in wire form (TS: `NostrFilter` objects; PHP: `Filter::toArray()`).
 2. Canonicalise recursively:
-   - **object / map** — sort keys ascending, then canonicalise each value;
-   - **array / list** — canonicalise each element, then sort the elements ascending by their canonical JSON encoding;
+   - **object / map** — sort keys ascending (bytewise), then canonicalise each value;
+   - **array / list** — canonicalise each element, then sort the elements ascending (bytewise) by their canonical encoding;
    - **scalar** — left unchanged.
-3. JSON-encode the canonicalised structure compactly, with `/` and non-ASCII left unescaped.
+3. Encode the canonicalised structure as **ASCII-safe JSON**: compact (no inserted whitespace), `/` left unescaped, and every non-ASCII code unit escaped as a lowercase `\uXXXX` (astral characters as UTF-16 surrogate pairs). This is what PHP's `json_encode` emits *without* `JSON_UNESCAPED_UNICODE`; the TS side post-escapes `JSON.stringify` to match.
 4. The hash is the lowercase-hex **SHA-256** of that canonical string.
 
 Because object keys, array elements, and the filters themselves are all sorted, two filter sets that select the same events produce the same digest regardless of how they were ordered on input.
 
-### Cross-language parity (status)
+### Cross-language parity
 
-Each implementation guarantees the property **within its own runtime**, and the two are byte-identical for all-ASCII inputs — event ids, pubkeys, kinds, and ASCII tag values (for example, both hash the empty set `[]` to `4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945`, and both hash a single empty filter `[{}]` to `e10808d43975dc400731053386849f864f297e6c4f7519c380f3dbaf7067a840`). Full byte-for-byte parity across every input is **not yet guaranteed**. Both remaining divergences are confined to non-ASCII characters in string-valued fields — the NIP-50 `search` string and tag-filter values; ASCII-only filters are byte-identical. Known residual divergences:
+The two implementations are **byte-for-byte identical for every input**, including non-ASCII `search` strings and tag-filter values. Making the canonical form ASCII-safe (step 3) is the mechanism: with no raw non-ASCII bytes, bytewise / UTF-8-byte / UTF-16-code-unit / code-point collation all coincide, so both runtimes sort and encode identically — closing both the `JSON.stringify`-vs-`json_encode` escaping gap (`U+2028` / `U+2029`) and the UTF-16-vs-UTF-8 sort gap (astral characters such as emoji).
 
-- **U+2028 / U+2029 escaping** — PHP's `json_encode` escapes the line- and paragraph-separator code points to `\u2028` / `\u2029` even with `JSON_UNESCAPED_UNICODE`, while TS's `JSON.stringify` emits them raw, so a value containing either yields a different digest.
-- **supplementary-plane (astral) collation** — element- and key-sorting compares by UTF-16 code unit (TS) versus UTF-8 byte (PHP); these disagree for astral characters (e.g. emoji) ordered against the U+E000–U+FFFF range.
+Parity is locked by shared conformance anchors asserted in both test suites — equivalent inputs must hash to the same digest in both:
 
-Each implementation is still internally order-independent regardless. Until a shared conformance vector set locks byte-parity, do not key a **cross-language shared** cache or store off this digest. For same-runtime dedup — the relay pool's use — it is correct today.
+| Input | SHA-256 digest |
+|---|---|
+| `[]` (empty set) | `4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945` |
+| `[{}]` (one empty filter) | `e10808d43975dc400731053386849f864f297e6c4f7519c380f3dbaf7067a840` |
+| `[{ "kinds": [2,1], "limit": 5 }]` | `a34519033f2032b87a019ef94f4be40fc1ab6a621d2b66c55b0d386c3e576587` |
+| `[{ "search": "U+2028" }]` | `aee96085e5802e7b70a145ffdf6aa7e2335469aa223be66c79c9ad1699ecd7f2` |
+| `[{ "search": "U+1F600" }]` (astral) | `ac283a84cb87cd19a956f552a82cb9155fc1a980d576356c4d987e71710a4dd3` |
+| `[{ "#t": ["U+1F600","U+1F4A9"] }]` (astral sort) | `a47382ebe89a655c3d9d1e27a1e5e445ca0dd4f5348e72f518b2a98b6f77f92b` |
 
 ## Credits
 

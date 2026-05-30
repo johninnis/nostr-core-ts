@@ -65,6 +65,25 @@ Deno.test("hashFilters - a single empty filter matches the cross-language anchor
   assertEquals(hashFilters([{}]), "e10808d43975dc400731053386849f864f297e6c4f7519c380f3dbaf7067a840")
 })
 
+// Non-ASCII anchors: the canonical form escapes non-ASCII as \uXXXX, so these match PHP byte for byte.
+Deno.test("hashFilters - escapes a U+2028 search string identically to PHP", () => {
+  assertEquals(hashFilters([{ search: "\u2028" }]), "aee96085e5802e7b70a145ffdf6aa7e2335469aa223be66c79c9ad1699ecd7f2")
+})
+
+Deno.test("hashFilters - escapes an astral search character as a surrogate pair (matches PHP)", () => {
+  assertEquals(
+    hashFilters([{ search: "\u{1F600}" }]),
+    "ac283a84cb87cd19a956f552a82cb9155fc1a980d576356c4d987e71710a4dd3",
+  )
+})
+
+Deno.test("hashFilters - sorts astral tag values identically to PHP", () => {
+  assertEquals(
+    hashFilters([{ "#t": ["\u{1F600}", "\u{1F4A9}"] }]),
+    "a47382ebe89a655c3d9d1e27a1e5e445ca0dd4f5348e72f518b2a98b6f77f92b",
+  )
+})
+
 Deno.test("hashFilters - preserves duplicate array elements (equal sort keys)", () => {
   assertNotEquals(hashFilters([{ authors: [authorA, authorA] }]), hashFilters([{ authors: [authorA] }]))
 })
