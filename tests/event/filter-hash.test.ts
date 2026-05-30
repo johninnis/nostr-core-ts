@@ -46,10 +46,19 @@ Deno.test("hashFilters - returns a lowercase hex SHA-256 digest", () => {
   assertMatch(hashFilters([{ kinds: [1] }]), /^[0-9a-f]{64}$/)
 })
 
-// Pinned digests of the canonical form. These are the cross-language conformance anchors:
-// PHP `FilterHasher::hash` must produce the same digest for the same canonical input.
+// Pinned digests of the canonical form, asserted identically in the PHP suite — the
+// cross-language conformance anchors. Equivalent inputs must hash to these exact digests in
+// both runtimes. (The property tests above use language-local inputs — TS brands pubkeys via
+// parsePublicKey, which PHP does not — so conformance rides on these shared anchors.)
 Deno.test('hashFilters - empty filter set hashes to SHA-256 of "[]"', () => {
   assertEquals(hashFilters([]), "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945")
+})
+
+Deno.test("hashFilters - kinds+limit filter matches the cross-language anchor", () => {
+  assertEquals(
+    hashFilters([{ kinds: [2, 1], limit: 5 }]),
+    "a34519033f2032b87a019ef94f4be40fc1ab6a621d2b66c55b0d386c3e576587",
+  )
 })
 
 Deno.test("hashFilters - preserves duplicate array elements (equal sort keys)", () => {
