@@ -3,6 +3,7 @@
 import { base64 } from "@scure/base"
 import { DEFAULT_AUTH_EXPIRATION_SECONDS, NIP98_AUTH_HEADER_PREFIX } from "./nip98-builder.ts"
 import { sha256Hex } from "./sha256.ts"
+import { constantTimeEqual } from "./constant-time-equal.ts"
 import { parseNostrEvent } from "./event-utils.ts"
 import { KIND_HTTP_AUTH } from "../value-object/kinds.ts"
 import { extractTagValues } from "./tags.ts"
@@ -81,13 +82,6 @@ const normaliseUrl = (url: string): string | null => {
   const portPart = port ? `:${port}` : ""
   const path = parsed.pathname || "/"
   return `${scheme}://${parsed.hostname}${portPart}${path}${parsed.search}`
-}
-
-const constantTimeEqual = (a: string, b: string): boolean => {
-  if (a.length !== b.length) return false
-  let diff = 0
-  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i)
-  return diff === 0
 }
 
 /** Parse a NIP-98 `Authorization: Nostr <base64-json>` header into its signed event; does not verify the signature. */

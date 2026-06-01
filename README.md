@@ -98,6 +98,7 @@ App-specific kind groupings (engagement, profile-metadata, list kinds, etc.) liv
 - `verify.ts` — `verifyEventSignature(event)` returns a `Promise<boolean>`; uses `@noble/curves` Schnorr.
 - `sort.ts` — `byCreatedAtDesc` and `byCreatedAtAsc` comparators.
 - `sha256.ts` — `computeSha256(data)` hashes a `BufferSource` (uses WebCrypto when available, falls back to `@noble/hashes`); `sha256Hex(text)` is the string-input convenience wrapper.
+- `constant-time-equal.ts` — `constantTimeEqual(a, b)` compares two strings without short-circuiting on the first differing character, so timing does not leak how much of a secret matched (returns `false` immediately only when the lengths differ). The ONE way to compare pairing secrets, auth tokens, and payload hashes; the NIP-98 validator and `@innis/nostr-nip46`'s bunker both use it.
 - `reaction.ts` — `DEFAULT_REACTION` (the `"+"` literal used when no emoji is supplied) and `formatReactionEmoji(content)` (normalises an event's reaction content to its display form).
 - `error-utils.ts` — `errorMessage(err)` extracts a message string from any thrown value; `reportUnhandledError(err)` is the standard sink for fire-and-forget rejections (re-throws in a microtask so the host's uncaught-exception handler picks it up).
 
@@ -160,9 +161,13 @@ User rejection is **not** a `SignerError` tag — it is `SignerRejectedError`, i
 
 `@innis/nostr-nip07` and `@innis/nostr-nip46` both implement the `Signer` interface — the consumer picks one at login and threads the same `Signer` everywhere.
 
+`assertPubkeyMatches(expected, actual, onMismatch?)` — `src/domain/service/pubkey-match.ts` — is the ONE place that decides how a signer reacts when it returns the wrong identity. It no-ops when `expected` is `null` (user pubkey not yet known); otherwise, on mismatch it fires the optional `onMismatch` hook (host apps force a logout) and throws `PubkeyMismatchError`. Every `Signer` adapter calls it after signing rather than re-implementing the comparison.
+
 #### `encryptJson` / `decryptJson` — `src/domain/service/json-crypto.ts`
 
-`encryptJson(signer, pubkey, value)` JSON-stringifies and calls `nip44Encrypt`, returning `Result<string, JsonCryptoError>`. `decryptJson(signer, pubkey, ciphertext)` calls `nip44Decrypt` and `JSON.parse`s the payload, returning `Result<unknown, JsonCryptoError>` — callers validate the shape. **The ONE way to round-trip JSON over NIP-44.** Never call `signer.nip44*` with manual `JSON.stringify` / `JSON.parse`.
+`encryptJson(cipher, pubkey, value)` JSON-stringifies and calls `nip44Encrypt`, returning `Result<string, JsonCryptoError>`. `decryptJson(cipher, pubkey, ciphertext)` calls `nip44Decrypt` and `JSON.parse`s the payload, returning `Result<unknown, JsonCryptoError>` — callers validate the shape. **The ONE way to round-trip JSON over NIP-44.** Never call `nip44*` with manual `JSON.stringify` / `JSON.parse`.
+
+Both take a `PeerCipher` (`src/domain/service/peer-cipher.ts`), not the full `Signer` — the narrow port of just the four `nip04*` / `nip44*` methods, so a JSON codec carries no dependency on `signEvent` / `getPublicKey`. `Signer extends PeerCipher`, so any signer is accepted unchanged.
 
 #### `createLocalSigner` — `src/infrastructure/adapter/local-signer-adapter.ts`
 

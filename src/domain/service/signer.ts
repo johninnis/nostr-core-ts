@@ -1,7 +1,6 @@
 import type { NostrEvent, UnsignedEvent } from "../value-object/nostr-event.ts"
 import type { PublicKey } from "../value-object/public-key.ts"
-import type { Result } from "../value-object/result.ts"
-import type { SignerError } from "../exception/signer-error.ts"
+import type { PeerCipher } from "./peer-cipher.ts"
 
 /**
  * Discriminator identifying which signer implementation a `Signer` instance is.
@@ -27,12 +26,8 @@ export type SignerKind = "local" | "extension" | "bunker"
  *
  * See README §"Design conventions → Signer interface: throw vs Result". Don't propose unifying.
  */
-export interface Signer {
+export interface Signer extends PeerCipher {
   readonly kind: SignerKind
   readonly getPublicKey: () => Promise<PublicKey>
   readonly signEvent: (event: UnsignedEvent) => Promise<NostrEvent>
-  readonly nip04Encrypt: (pubkey: PublicKey, plaintext: string) => Promise<Result<string, SignerError>>
-  readonly nip04Decrypt: (pubkey: PublicKey, ciphertext: string) => Promise<Result<string, SignerError>>
-  readonly nip44Encrypt: (pubkey: PublicKey, plaintext: string) => Promise<Result<string, SignerError>>
-  readonly nip44Decrypt: (pubkey: PublicKey, ciphertext: string) => Promise<Result<string, SignerError>>
 }

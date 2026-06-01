@@ -102,8 +102,11 @@ export { parseAmountSats, parseBolt11Amount, parseNutzap, parseZapReceipt } from
 export type { ZapInfo } from "./zap-parser.ts"
 
 export { decryptJson, encryptJson } from "./json-crypto.ts"
+export { constantTimeEqual } from "./constant-time-equal.ts"
 
+export type { PeerCipher } from "./peer-cipher.ts"
 export type { Signer, SignerKind } from "./signer.ts"
+export { assertPubkeyMatches } from "./pubkey-match.ts"
 
 export {
   buildNip98AuthEvent,
