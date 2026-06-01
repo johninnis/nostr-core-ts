@@ -1,5 +1,7 @@
 # @innis/nostr-core
 
+[![CI](https://github.com/johninnis/nostr-core-ts/actions/workflows/ci.yml/badge.svg)](https://github.com/johninnis/nostr-core-ts/actions/workflows/ci.yml)
+
 The foundation. Branded primitives, event utilities, the `Signer` and `HttpClient` interfaces, NIP-19 / NIP-05 encoding, kind constants, the `Result` type, and a single `TaggedError` hierarchy every error in the ecosystem extends. Every other `@innis/*` package depends on it.
 
 NIP-44 v2 is vendored from [paulmillr/nip44](https://github.com/paulmillr/nip44/) (see [Credits](#credits)); Schnorr / secp256k1 come from `@noble/curves`. `defaultLocalSignerTools` exports a ready-made bag of all of these — drop it straight into `createLocalSigner`, or pass your own `LocalSignerTools` to swap any of them out (hardware signer, alternate NIP-44, etc.).
