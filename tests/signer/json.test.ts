@@ -1,5 +1,5 @@
 import { assertEquals } from "@std/assert"
-import { decryptJson, encryptJson } from "../../src/domain/service/json-crypto.ts"
+import { decryptJson, encryptJson, nip04DecryptJson, nip04EncryptJson } from "../../src/domain/service/json-crypto.ts"
 import type { Signer } from "../../src/domain/service/signer.ts"
 import { failure, isFailure, isOk, ok } from "../../src/domain/value-object/result.ts"
 import { isRecord } from "../../src/domain/value-object/guards.ts"
@@ -28,6 +28,35 @@ Deno.test("encryptJson - stringifies the value before encrypting", async () => {
 Deno.test("decryptJson - parses the decrypted payload", async () => {
   const result = await decryptJson(makeSigner(), PUB, 'enc:{"a":1}')
   assertEquals(isOk(result) && isRecord(result.value) && result.value.a, 1)
+})
+
+Deno.test("encryptJson - fails with json-stringify-failed for a non-serialisable value", async () => {
+  const result = await encryptJson(makeSigner(), PUB, 1n)
+  assertEquals(isFailure(result) && result.error.tag, "json-stringify-failed")
+})
+
+Deno.test("nip04EncryptJson - stringifies the value and routes through nip04, not nip44", async () => {
+  const signer = makeSigner({
+    nip04Encrypt: (_pubkey, plaintext) => Promise.resolve(ok(`nip04:${plaintext}`)),
+  })
+  const result = await nip04EncryptJson(signer, PUB, { a: 1 })
+  assertEquals(isOk(result) && result.value, 'nip04:{"a":1}')
+})
+
+Deno.test("nip04DecryptJson - decrypts over nip04 and parses the payload", async () => {
+  const signer = makeSigner({
+    nip04Decrypt: (_pubkey, ciphertext) => Promise.resolve(ok(ciphertext.replace(/^nip04:/, ""))),
+  })
+  const result = await nip04DecryptJson(signer, PUB, 'nip04:{"a":1}')
+  assertEquals(isOk(result) && isRecord(result.value) && result.value.a, 1)
+})
+
+Deno.test("nip04DecryptJson - surfaces a JsonCryptoError when the signer fails", async () => {
+  const signer = makeSigner({
+    nip04Decrypt: () => Promise.resolve(failure(new SignerError("decrypt-failed", "nope"))),
+  })
+  const result = await nip04DecryptJson(signer, PUB, "nip04:whatever")
+  assertEquals(isFailure(result) && result.error instanceof JsonCryptoError, true)
 })
 
 Deno.test("encryptJson then decryptJson - round-trips a value", async () => {

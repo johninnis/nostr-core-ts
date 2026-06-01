@@ -163,11 +163,13 @@ User rejection is **not** a `SignerError` tag — it is `SignerRejectedError`, i
 
 `assertPubkeyMatches(expected, actual, onMismatch?)` — `src/domain/service/pubkey-match.ts` — is the ONE place that decides how a signer reacts when it returns the wrong identity. It no-ops when `expected` is `null` (user pubkey not yet known); otherwise, on mismatch it fires the optional `onMismatch` hook (host apps force a logout) and throws `PubkeyMismatchError`. Every `Signer` adapter calls it after signing rather than re-implementing the comparison.
 
-#### `encryptJson` / `decryptJson` — `src/domain/service/json-crypto.ts`
+#### `encryptJson` / `decryptJson` (+ `nip04*` variants) — `src/domain/service/json-crypto.ts`
 
 `encryptJson(cipher, pubkey, value)` JSON-stringifies and calls `nip44Encrypt`, returning `Result<string, JsonCryptoError>`. `decryptJson(cipher, pubkey, ciphertext)` calls `nip44Decrypt` and `JSON.parse`s the payload, returning `Result<unknown, JsonCryptoError>` — callers validate the shape. **The ONE way to round-trip JSON over NIP-44.** Never call `nip44*` with manual `JSON.stringify` / `JSON.parse`.
 
-Both take a `PeerCipher` (`src/domain/service/peer-cipher.ts`), not the full `Signer` — the narrow port of just the four `nip04*` / `nip44*` methods, so a JSON codec carries no dependency on `signEvent` / `getPublicKey`. `Signer extends PeerCipher`, so any signer is accepted unchanged.
+`nip04EncryptJson` / `nip04DecryptJson` are the identical codec over **NIP-04**, for legacy peers that cannot do NIP-44 (e.g. an old NIP-46 client). Same signatures, same `JsonCryptoError` contract — they share one private serialise/parse implementation with the NIP-44 pair, differing only in which cipher method they call. New code should use `encryptJson` / `decryptJson`; reach for the `nip04*` variants only for backward compatibility. Core never auto-falls-back between ciphers — picking NIP-04 is always the caller's explicit choice, so NIP-44-only callers (NIP-17 gift-wrap, NIP-51 private tags) can't be silently downgraded.
+
+All four take a `PeerCipher` (`src/domain/service/peer-cipher.ts`), not the full `Signer` — the narrow port of just the four `nip04*` / `nip44*` methods, so a JSON codec carries no dependency on `signEvent` / `getPublicKey`. `Signer extends PeerCipher`, so any signer is accepted unchanged.
 
 #### `createLocalSigner` — `src/infrastructure/adapter/local-signer-adapter.ts`
 

@@ -101,7 +101,7 @@ export { DEFAULT_REACTION, formatReactionEmoji } from "./reaction.ts"
 export { parseAmountSats, parseBolt11Amount, parseNutzap, parseZapReceipt } from "./zap-parser.ts"
 export type { ZapInfo } from "./zap-parser.ts"
 
-export { decryptJson, encryptJson } from "./json-crypto.ts"
+export { decryptJson, encryptJson, nip04DecryptJson, nip04EncryptJson } from "./json-crypto.ts"
 export { constantTimeEqual } from "./constant-time-equal.ts"
 
 export type { PeerCipher } from "./peer-cipher.ts"
