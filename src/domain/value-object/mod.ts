@@ -20,7 +20,7 @@ export { isValidTag, isValidTagsArray } from "./nostr-event.ts"
 export type { NostrFilter } from "./nostr-filter.ts"
 
 export type { PublicKey } from "./public-key.ts"
-export { InvalidPublicKeyError, isValidPublicKey, parsePublicKey } from "./public-key.ts"
+export { InvalidPublicKeyError, isValidPublicKey, parsePublicKey, tryParsePublicKey } from "./public-key.ts"
 
 export type { RelayUrl } from "./relay-url.ts"
 export {

@@ -1,6 +1,6 @@
 {
   "name": "@innis/nostr-core",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "license": "MIT",
   "description": "TypeScript foundation primitives for Nostr: branded types, event helpers, Signer + HttpClient ports, NIP-17 DMs, NIP-98 HTTP auth, and a Result/TaggedError model.",
   "exports": {
