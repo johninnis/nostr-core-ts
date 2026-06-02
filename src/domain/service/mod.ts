@@ -58,7 +58,7 @@ export { parseRelayMessage } from "./relay-message.ts"
 export type { RelayMessage } from "./relay-message.ts"
 
 export { isParameterisedReplaceable, isReplaceable, isRepostKind, REPOST_KINDS } from "./kinds.ts"
-export { replaceableStorageKey } from "./replaceable.ts"
+export { replaceableStorageKey, replaceableSupersedes } from "./replaceable.ts"
 
 export {
   addEventTag,

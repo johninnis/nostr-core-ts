@@ -31,8 +31,9 @@ import {
   isRepostKind,
   REPOST_KINDS,
 } from "../../src/domain/service/kinds.ts"
-import { replaceableStorageKey } from "../../src/domain/service/replaceable.ts"
+import { replaceableStorageKey, replaceableSupersedes } from "../../src/domain/service/replaceable.ts"
 import { parsePublicKey } from "../../src/domain/value-object/public-key.ts"
+import { parseEventId } from "../../src/domain/value-object/event-id.ts"
 
 const PK = parsePublicKey("a".repeat(64))
 
@@ -250,4 +251,24 @@ Deno.test("replaceableStorageKey - returns null for regular events", () => {
 Deno.test("replaceableStorageKey - returns null for kind outside replaceable ranges", () => {
   const event = makeEvent(5, PK)
   assertEquals(replaceableStorageKey(event), null)
+})
+
+const LOW_ID = parseEventId("11".padEnd(64, "0"))
+const HIGH_ID = parseEventId("22".padEnd(64, "0"))
+
+Deno.test("replaceableSupersedes - a strictly newer candidate supersedes", () => {
+  assertEquals(replaceableSupersedes({ id: HIGH_ID, created_at: 2000 }, { id: LOW_ID, created_at: 1000 }), true)
+})
+
+Deno.test("replaceableSupersedes - a strictly older candidate does not supersede", () => {
+  assertEquals(replaceableSupersedes({ id: LOW_ID, created_at: 1000 }, { id: HIGH_ID, created_at: 2000 }), false)
+})
+
+Deno.test("replaceableSupersedes - on a created_at tie the lexicographically lower id wins (NIP-01)", () => {
+  assertEquals(replaceableSupersedes({ id: LOW_ID, created_at: 1000 }, { id: HIGH_ID, created_at: 1000 }), true)
+  assertEquals(replaceableSupersedes({ id: HIGH_ID, created_at: 1000 }, { id: LOW_ID, created_at: 1000 }), false)
+})
+
+Deno.test("replaceableSupersedes - an identical event does not supersede itself", () => {
+  assertEquals(replaceableSupersedes({ id: LOW_ID, created_at: 1000 }, { id: LOW_ID, created_at: 1000 }), false)
 })
