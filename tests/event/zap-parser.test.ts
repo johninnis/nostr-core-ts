@@ -121,3 +121,13 @@ Deno.test("parseNutzap - returns null when any proof is not an object", () => {
   const event = makeEvent(9321, [["proof", "[1, 2, 3]"], ["proof", JSON.stringify({ amount: 7 })]])
   assertEquals(parseNutzap(event), null)
 })
+
+Deno.test("parseNutzap - returns null when any proof amount is negative", () => {
+  const event = makeEvent(9321, [["proof", JSON.stringify({ amount: -5 })], ["proof", JSON.stringify({ amount: 10 })]])
+  assertEquals(parseNutzap(event), null)
+})
+
+Deno.test("parseNutzap - returns null when any proof amount is fractional", () => {
+  const event = makeEvent(9321, [["proof", JSON.stringify({ amount: 1.5 })], ["proof", JSON.stringify({ amount: 10 })]])
+  assertEquals(parseNutzap(event), null)
+})

@@ -79,7 +79,11 @@ export const parseZapReceipt = (event: NostrEvent): ZapInfo | null => {
 const parseProofAmount = (proofJson: string): number | null => {
   const parsed = tryParseJson(proofJson)
   if (!isRecord(parsed)) return null
-  return typeof parsed.amount === "number" ? parsed.amount : null
+  const amount = parsed.amount
+  // Cashu proof amounts are non-negative integers. Reject negative / fractional / unsafe values
+  // from untrusted input rather than folding them into the running total.
+  if (typeof amount !== "number" || !Number.isSafeInteger(amount) || amount < 0) return null
+  return amount
 }
 
 /** Parse a kind-9321 nutzap event (NIP-61) and sum its `proof` amounts into a `ZapInfo`. */

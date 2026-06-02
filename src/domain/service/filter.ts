@@ -2,7 +2,14 @@ import type { NostrEvent } from "../value-object/nostr-event.ts"
 import type { NostrFilter } from "../value-object/nostr-filter.ts"
 import { extractTagValues } from "./tags.ts"
 
-/** `true` when `event` satisfies every constraint in `filter` (NIP-01 filter semantics, including `#<letter>` tag filters). */
+/**
+ * `true` when `event` satisfies every constraint in `filter` (NIP-01 filter semantics, including
+ * `#<letter>` tag filters). `limit` and `search` are **not** per-event predicates and are ignored:
+ * `limit` bounds the result count (a subscription concern, not a property of any single event), and
+ * `search` (NIP-50) is relay-defined full-text matching that can't be reproduced client-side. A
+ * filter carrying `search` therefore matches here on its other constraints alone — don't rely on
+ * `matchesFilter` to enforce a search term.
+ */
 export const matchesFilter = (event: NostrEvent, filter: NostrFilter): boolean => {
   if (filter.ids && !filter.ids.includes(event.id)) return false
   if (filter.authors && !filter.authors.includes(event.pubkey)) return false
