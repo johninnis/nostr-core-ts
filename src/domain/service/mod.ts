@@ -100,6 +100,14 @@ export type {
 export { DEFAULT_REACTION, formatReactionEmoji } from "./reaction.ts"
 export { parseAmountSats, parseBolt11Amount, parseNutzap, parseZapReceipt } from "./zap-parser.ts"
 export type { ZapInfo } from "./zap-parser.ts"
+export {
+  buildFileMetadataEvent,
+  buildImetaTag,
+  parseFileMetadataEvent,
+  parseImetaTag,
+  parseImetaTags,
+} from "./file-metadata.ts"
+export type { FileMetadata } from "./file-metadata.ts"
 
 export { decryptJson, encryptJson, nip04DecryptJson, nip04EncryptJson } from "./json-crypto.ts"
 export { constantTimeEqual } from "./constant-time-equal.ts"

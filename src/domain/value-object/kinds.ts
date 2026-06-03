@@ -40,6 +40,8 @@ export const KIND_MLS_WELCOME = 444 as const
 export const KIND_MLS_GROUP_MESSAGE = 445 as const
 /** NIP-59 kind 1059 — gift wrap (the outer event of a sealed rumor). */
 export const KIND_GIFT_WRAP = 1059 as const
+/** NIP-94 kind 1063 — file metadata (url, hashes, mime, dimensions, blurhash, alt …). */
+export const KIND_FILE_METADATA = 1063 as const
 /** NIP-51 kind 1068 — curated set (deprecated; superseded by 30000-range sets). */
 export const KIND_CURATED_SET = 1068 as const
 /** NIP-22 kind 1111 — comment on an event (the universal reply kind). */
