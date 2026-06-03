@@ -14,6 +14,8 @@ import type { PublicKey } from "../value-object/public-key.ts"
 import { isValidPublicKey } from "../value-object/public-key.ts"
 import { parseAddressableRef } from "../value-object/addressable-ref.ts"
 import { encodeNaddr } from "./bech32.ts"
+import { isParameterisedReplaceable } from "./kinds.ts"
+import { getTagValue } from "./tags.ts"
 import { DEFAULT_REACTION } from "./reaction.ts"
 
 /**
@@ -84,6 +86,19 @@ const encodeAddressTag = (value: string): string | null => {
   const parsed = parseAddressableRef(value)
   if (!parsed || !parsed.dTag) return null
   return encodeNaddr(parsed)
+}
+
+/**
+ * The {@link EventOrAddressRef} a reply uses to point at `event`: an `naddr1...` coordinate for an
+ * addressable (parameterised-replaceable) event with a `d` tag, otherwise the hex event id. This is
+ * the inverse of {@link encodeAddressTag} and the value `buildRefs` produces for a reply's parent.
+ */
+export const replyTargetRef = (event: NostrEvent): EventOrAddressRef => {
+  if (isParameterisedReplaceable(event.kind)) {
+    const dTag = getTagValue(event.tags, "d") ?? ""
+    if (dTag) return encodeNaddr({ kind: event.kind, pubkey: event.pubkey, dTag })
+  }
+  return event.id
 }
 
 const buildRefs = (raw: NostrEvent): EventRefs => {

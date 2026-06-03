@@ -1,6 +1,8 @@
 import type { AddressableEventRef } from "../value-object/addressable-ref.ts"
 import { formatAddressableRef } from "../value-object/addressable-ref.ts"
 import type { EventId } from "../value-object/event-id.ts"
+import { isValidEventId } from "../value-object/event-id.ts"
+import type { EventOrAddressRef } from "./transformer.ts"
 import {
   KIND_DELETION,
   KIND_HIGHLIGHT,
@@ -70,14 +72,21 @@ const extractReferenceTags = (content: string): ReadonlyArray<Tag> => {
   return tags
 }
 
-/** Threading context for `buildTextNote` — the parent event and (optionally) the thread root plus any pubkeys to keep in the conversation. */
+/** Threading context for `buildTextNote` — the parent event and (optionally) the thread root plus any pubkeys to keep in the conversation. A ref may be a hex event id (`e` tag) or an `naddr1...` coordinate for an addressable parent (`a` tag). */
 interface ReplyContext {
-  readonly replyToId: EventId
+  readonly replyToId: EventOrAddressRef
   readonly replyToAuthorPubkey: PublicKey
-  readonly rootEventId?: EventId | null
+  readonly rootEventId?: EventOrAddressRef | null
   readonly rootAuthorPubkey?: PublicKey | null
   readonly rootRelayHint?: string | null
   readonly threadPubkeys?: ReadonlyArray<PublicKey>
+}
+
+const threadTag = (ref: EventOrAddressRef, relay: string, marker: string): Tag => {
+  if (isValidEventId(ref)) return ["e", ref, relay, marker]
+  const decoded = decodeNostrEntity(ref)
+  if (decoded && decoded.type === "naddr") return ["a", formatAddressableRef(decoded), relay, marker]
+  return ["e", ref, relay, marker]
 }
 
 const buildReplyTags = ({
@@ -92,9 +101,9 @@ const buildReplyTags = ({
   const isSameAsRoot = !rootEventId || rootEventId === replyToId
   const relay = rootRelayHint ?? ""
 
-  const tags: Array<Tag> = [["e", effectiveRootId, relay, "root"]]
+  const tags: Array<Tag> = [threadTag(effectiveRootId, relay, "root")]
 
-  if (!isSameAsRoot) tags.push(["e", replyToId, relay, "reply"])
+  if (!isSameAsRoot) tags.push(threadTag(replyToId, relay, "reply"))
 
   // `hasPubkey` matches on (name, value) ignoring the relay hint, so a duplicate pubkey is
   // dropped regardless of which slot first carried it. Append-order is preserved.

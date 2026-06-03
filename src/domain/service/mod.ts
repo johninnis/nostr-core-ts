@@ -85,7 +85,7 @@ export {
 } from "./tags.ts"
 export type { DecryptFn, EventRef, FullList, PrivateEntriesError, RelayEntry, RelayMarker } from "./tags.ts"
 
-export { transformEvent } from "./transformer.ts"
+export { replyTargetRef, transformEvent } from "./transformer.ts"
 export type {
   EventOrAddressRef,
   EventRefs,

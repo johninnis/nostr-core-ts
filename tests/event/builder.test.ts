@@ -99,6 +99,34 @@ Deno.test("buildTextNote - creates root and reply e-tags for threaded reply", ()
   assertEquals(replyTag?.[1], eid2)
 })
 
+Deno.test("buildTextNote - reply to an addressable parent uses an a-tag root, not an e-tag", () => {
+  const naddr = encodeNaddr({ kind: KIND_LONGFORM, pubkey: pk1, dTag: "my-article" })
+  const coord = formatAddressableRef({ kind: KIND_LONGFORM, pubkey: pk1, dTag: "my-article" })
+  const event = buildTextNote("Amen", {
+    replyToId: naddr,
+    replyToAuthorPubkey: pk1,
+  }, 1700000000)
+  const aTag = event.tags.find((t) => t[0] === "a" && t[3] === "root")
+  assertEquals(aTag?.[1], coord)
+  assertEquals(event.tags.some((t) => t[0] === "e"), false)
+})
+
+Deno.test("buildTextNote - reply to a note within an addressable thread mixes a-tag root and e-tag reply", () => {
+  const naddr = encodeNaddr({ kind: KIND_LONGFORM, pubkey: pk1, dTag: "my-article" })
+  const coord = formatAddressableRef({ kind: KIND_LONGFORM, pubkey: pk1, dTag: "my-article" })
+  const event = buildTextNote("nested", {
+    replyToId: eid2,
+    replyToAuthorPubkey: pk2,
+    rootEventId: naddr,
+  }, 1700000000)
+  const rootTag = event.tags.find((t) => t[3] === "root")
+  assertEquals(rootTag?.[0], "a")
+  assertEquals(rootTag?.[1], coord)
+  const replyTag = event.tags.find((t) => t[3] === "reply")
+  assertEquals(replyTag?.[0], "e")
+  assertEquals(replyTag?.[1], eid2)
+})
+
 Deno.test("buildTextNote - includes thread pubkeys without duplicates", () => {
   const event = buildTextNote("reply", {
     replyToId: eid1,

@@ -1,6 +1,7 @@
 import { assertEquals, assertExists } from "@std/assert"
-import { transformEvent } from "../../src/domain/service/transformer.ts"
+import { replyTargetRef, transformEvent } from "../../src/domain/service/transformer.ts"
 import { formatAddressableRef } from "../../src/domain/value-object/addressable-ref.ts"
+import { encodeNaddr } from "../../src/domain/service/bech32.ts"
 import type { NostrEvent } from "../../src/domain/value-object/nostr-event.ts"
 import { parsePublicKey } from "../../src/domain/value-object/public-key.ts"
 import { parseSig } from "../../src/domain/value-object/sig.ts"
@@ -29,6 +30,28 @@ const makeEvent = (overrides: Partial<NostrEvent> & { kind: number }): NostrEven
   content: "",
   tags: [],
   ...overrides,
+})
+
+Deno.test("replyTargetRef - returns the hex id for a non-addressable event", () => {
+  const raw = makeEvent({ kind: KIND_SHORT_NOTE })
+  assertEquals(replyTargetRef(raw), raw.id)
+})
+
+Deno.test("replyTargetRef - returns the naddr coordinate for an addressable event", () => {
+  const raw = makeEvent({ kind: KIND_LONGFORM, tags: [["d", "my-article"]] })
+  assertEquals(replyTargetRef(raw), encodeNaddr({ kind: KIND_LONGFORM, pubkey: pk1, dTag: "my-article" }))
+})
+
+Deno.test("replyTargetRef - falls back to the hex id for an addressable event with no d tag", () => {
+  const raw = makeEvent({ kind: KIND_LONGFORM })
+  assertEquals(replyTargetRef(raw), raw.id)
+})
+
+Deno.test("replyTargetRef - matches the rootEvent a reply derives from an a-tag", () => {
+  const article = makeEvent({ kind: KIND_LONGFORM, tags: [["d", "my-article"]] })
+  const coord = formatAddressableRef({ kind: KIND_LONGFORM, pubkey: pk1, dTag: "my-article" })
+  const reply = makeEvent({ id: eid2, kind: KIND_SHORT_NOTE, tags: [["a", coord, "", "root"], ["p", pk1]] })
+  assertEquals(transformEvent(reply).refs.rootEvent, replyTargetRef(article))
 })
 
 Deno.test("transformEvent - returns raw event unchanged", () => {
