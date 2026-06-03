@@ -13,6 +13,7 @@ import { formatAddressableRef } from "../../src/domain/value-object/addressable-
 import { encodeEventIdToNote, encodeNaddr, encodeNevent, encodePubkeyToNpub } from "../../src/domain/service/bech32.ts"
 import {
   KIND_DELETION,
+  KIND_GENERIC_REPOST,
   KIND_HIGHLIGHT,
   KIND_LONGFORM,
   KIND_LONGFORM_DRAFT,
@@ -240,13 +241,13 @@ Deno.test("buildTextNote - empty content produces no hashtag tags", () => {
   assertEquals(event.tags.length, 0)
 })
 
-Deno.test("buildRepost - creates kind 6 event", () => {
-  const event = buildRepost(eid1, pk1)
+Deno.test("buildRepost - creates kind 6 event for a kind-1 note", () => {
+  const event = buildRepost({ eventId: eid1, pubkey: pk1, kind: KIND_SHORT_NOTE })
   assertEquals(event.kind, KIND_REPOST)
 })
 
 Deno.test("buildRepost - includes e-tag and p-tag", () => {
-  const event = buildRepost(eid1, pk1)
+  const event = buildRepost({ eventId: eid1, pubkey: pk1, kind: KIND_SHORT_NOTE })
   const [eTag, pTag] = event.tags
   assertExists(eTag)
   assertExists(pTag)
@@ -254,6 +255,21 @@ Deno.test("buildRepost - includes e-tag and p-tag", () => {
   assertEquals(eTag[1], eid1)
   assertEquals(pTag[0], "p")
   assertEquals(pTag[1], pk1)
+})
+
+Deno.test("buildRepost - a non-note target is a kind-16 generic repost with a k tag", () => {
+  const event = buildRepost({ eventId: eid1, pubkey: pk1, kind: KIND_HIGHLIGHT })
+  assertEquals(event.kind, KIND_GENERIC_REPOST)
+  assertEquals(event.tags.some((t) => t[0] === "k" && t[1] === String(KIND_HIGHLIGHT)), true)
+  assertEquals(event.tags.some((t) => t[0] === "a"), false)
+})
+
+Deno.test("buildRepost - an addressable target is a kind-16 repost with a, k and e tags", () => {
+  const event = buildRepost({ eventId: eid1, pubkey: pk1, kind: KIND_LONGFORM, dTag: "my-article" })
+  assertEquals(event.kind, KIND_GENERIC_REPOST)
+  assertEquals(event.tags.some((t) => t[0] === "e" && t[1] === eid1), true)
+  assertEquals(event.tags.some((t) => t[0] === "k" && t[1] === String(KIND_LONGFORM)), true)
+  assertEquals(event.tags.some((t) => t[0] === "a" && t[1] === `${KIND_LONGFORM}:${pk1}:my-article`), true)
 })
 
 Deno.test("buildRepost - serialises raw event as content when provided", () => {
@@ -266,28 +282,28 @@ Deno.test("buildRepost - serialises raw event as content when provided", () => {
     created_at: 0,
     sig: parseSig("a".repeat(128)),
   }
-  const event = buildRepost(eid1, pk1, rawEvent)
+  const event = buildRepost({ eventId: eid1, pubkey: pk1, kind: KIND_SHORT_NOTE }, rawEvent)
   assertEquals(event.content, JSON.stringify(rawEvent))
 })
 
 Deno.test("buildRepost - uses empty content when no raw event", () => {
-  const event = buildRepost(eid1, pk1)
+  const event = buildRepost({ eventId: eid1, pubkey: pk1, kind: KIND_SHORT_NOTE })
   assertEquals(event.content, "")
 })
 
 Deno.test("buildReaction - creates kind 7 event with default + reaction", () => {
-  const event = buildReaction(eid1, pk1)
+  const event = buildReaction({ eventId: eid1, pubkey: pk1, kind: KIND_SHORT_NOTE })
   assertEquals(event.kind, KIND_REACTION)
   assertEquals(event.content, "+")
 })
 
 Deno.test("buildReaction - uses custom reaction content", () => {
-  const event = buildReaction(eid1, pk1, "🤙")
+  const event = buildReaction({ eventId: eid1, pubkey: pk1, kind: KIND_SHORT_NOTE }, "🤙")
   assertEquals(event.content, "🤙")
 })
 
 Deno.test("buildReaction - includes e-tag and p-tag", () => {
-  const event = buildReaction(eid1, pk1)
+  const event = buildReaction({ eventId: eid1, pubkey: pk1, kind: KIND_SHORT_NOTE })
   const [eTag, pTag] = event.tags
   assertExists(eTag)
   assertExists(pTag)
@@ -295,6 +311,12 @@ Deno.test("buildReaction - includes e-tag and p-tag", () => {
   assertEquals(eTag[1], eid1)
   assertEquals(pTag[0], "p")
   assertEquals(pTag[1], pk1)
+})
+
+Deno.test("buildReaction - an addressable target also carries an a tag", () => {
+  const event = buildReaction({ eventId: eid1, pubkey: pk1, kind: KIND_LONGFORM, dTag: "my-article" }, "🔥")
+  assertEquals(event.tags.some((t) => t[0] === "e" && t[1] === eid1), true)
+  assertEquals(event.tags.some((t) => t[0] === "a" && t[1] === `${KIND_LONGFORM}:${pk1}:my-article`), true)
 })
 
 Deno.test("buildDeletion - event target creates kind 5 with e and k tags", () => {

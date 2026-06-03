@@ -5,6 +5,7 @@ import { isValidEventId } from "../value-object/event-id.ts"
 import type { EventOrAddressRef } from "./transformer.ts"
 import {
   KIND_DELETION,
+  KIND_GENERIC_REPOST,
   KIND_HIGHLIGHT,
   KIND_REACTION,
   KIND_REPOST,
@@ -140,29 +141,41 @@ export const buildTextNote = (
   return { kind: KIND_SHORT_NOTE, created_at: createdAt ?? now(), tags, content }
 }
 
-/** Build a kind-6 repost of `targetEventId`; `rawEvent` (if given) is JSON-stringified into the content per NIP-18. */
-export const buildRepost = (
-  targetEventId: EventId,
-  targetAuthorPubkey: PublicKey,
-  rawEvent: NostrEvent | null = null,
-): UnsignedEvent => ({
-  kind: KIND_REPOST,
-  created_at: now(),
-  tags: [["e", targetEventId], ["p", targetAuthorPubkey]],
-  content: rawEvent ? JSON.stringify(rawEvent) : "",
-})
+/** The event a reaction or repost engages with: its id, author, and kind, plus a `dTag` when it is an addressable (parameterised-replaceable) event. */
+interface EngagementTarget {
+  readonly eventId: EventId
+  readonly pubkey: PublicKey
+  readonly kind: number
+  readonly dTag?: string
+}
 
-/** Build a kind-7 reaction to `targetEventId`; defaults to `+` (NIP-25 "like") when no `reaction` is supplied. */
-export const buildReaction = (
-  targetEventId: EventId,
-  targetAuthorPubkey: PublicKey,
-  reaction: string = DEFAULT_REACTION,
-): UnsignedEvent => ({
-  kind: KIND_REACTION,
-  created_at: now(),
-  tags: [["e", targetEventId], ["p", targetAuthorPubkey]],
-  content: reaction,
-})
+const addressTagFor = (target: EngagementTarget): Tag | null =>
+  target.dTag ? ["a", formatAddressableRef({ kind: target.kind, pubkey: target.pubkey, dTag: target.dTag })] : null
+
+/** Build a repost of `target` (NIP-18): kind 6 for a kind-1 note, otherwise a kind-16 generic repost carrying a `k` tag (and an `a` tag for an addressable target). `rawEvent` (if given) is JSON-stringified into the content. */
+export const buildRepost = (target: EngagementTarget, rawEvent: NostrEvent | null = null): UnsignedEvent => {
+  const isNote = target.kind === KIND_SHORT_NOTE
+  const tags: Array<Tag> = [["e", target.eventId], ["p", target.pubkey]]
+  if (!isNote) {
+    tags.push(["k", String(target.kind)])
+    const aTag = addressTagFor(target)
+    if (aTag) tags.push(aTag)
+  }
+  return {
+    kind: isNote ? KIND_REPOST : KIND_GENERIC_REPOST,
+    created_at: now(),
+    tags,
+    content: rawEvent ? JSON.stringify(rawEvent) : "",
+  }
+}
+
+/** Build a kind-7 reaction to `target` (NIP-25); defaults to `+` ("like"). An addressable target also gets an `a` tag so it is found by coordinate. */
+export const buildReaction = (target: EngagementTarget, reaction: string = DEFAULT_REACTION): UnsignedEvent => {
+  const tags: Array<Tag> = [["e", target.eventId], ["p", target.pubkey]]
+  const aTag = addressTagFor(target)
+  if (aTag) tags.push(aTag)
+  return { kind: KIND_REACTION, created_at: now(), tags, content: reaction }
+}
 
 interface EventDeletionTarget {
   readonly eventId: EventId
@@ -248,4 +261,4 @@ export const buildLongform = (
   return { kind, created_at: createdAt ?? now(), tags, content }
 }
 
-export type { BuildLongformInput, ReplyContext }
+export type { BuildLongformInput, EngagementTarget, ReplyContext }

@@ -37,16 +37,16 @@ interface EventRefs {
   readonly isReply: boolean
 }
 
-/** Per-kind projection for NIP-18 reposts — the id of the original event being reposted (or `null` if no `e` tag carried a valid id). */
+/** Per-kind projection for NIP-18 reposts — the original event being reposted as a hex id (`e` tag) or `naddr1...` coordinate (`a` tag), or `null` if neither was present. */
 interface RepostData {
-  readonly originalEventId: EventId | null
+  readonly originalEventId: EventOrAddressRef | null
 }
 
-/** Per-kind projection for NIP-25 reactions — the reaction's wire content and the target event being reacted to. */
+/** Per-kind projection for NIP-25 reactions — the reaction's wire content and the target being reacted to. */
 interface ReactionData {
   /** Wire form of the reaction (`event.content`, defaulting to `+` for empty content). Pass through `formatReactionEmoji` to get a display string. */
   readonly content: string
-  readonly targetEventId: EventId | null
+  readonly targetEventId: EventOrAddressRef | null
 }
 
 /** Per-kind projection for NIP-84 highlights — the highlighted text, surrounding context, caller comment, and the source URL or quoted event. */
@@ -184,12 +184,23 @@ const buildKindData = (kind: number, raw: NostrEvent): KindData => {
 }
 
 const buildRepostKindData = (raw: NostrEvent): KindData => {
-  let originalEventId: EventId | null = null
+  let originalEventId: EventOrAddressRef | null = null
 
   for (const tag of raw.tags) {
     if (tag[0] === "e" && tag[1] && isValidEventId(tag[1])) {
       originalEventId = tag[1]
       break
+    }
+  }
+  if (!originalEventId) {
+    for (const tag of raw.tags) {
+      if (tag[0] === "a" && tag[1]) {
+        const naddr = encodeAddressTag(tag[1])
+        if (naddr) {
+          originalEventId = naddr
+          break
+        }
+      }
     }
   }
 
@@ -198,13 +209,25 @@ const buildRepostKindData = (raw: NostrEvent): KindData => {
 
 const buildReactionKindData = (raw: NostrEvent): KindData => {
   const tags = raw.tags
-  let targetEventId: EventId | null = null
+  let targetEventId: EventOrAddressRef | null = null
 
   for (let i = tags.length - 1; i >= 0; i--) {
     const tag = tags[i]
     if (tag && tag[0] === "e" && tag[1] && isValidEventId(tag[1])) {
       targetEventId = tag[1]
       break
+    }
+  }
+  if (!targetEventId) {
+    for (let i = tags.length - 1; i >= 0; i--) {
+      const tag = tags[i]
+      if (tag && tag[0] === "a" && tag[1]) {
+        const naddr = encodeAddressTag(tag[1])
+        if (naddr) {
+          targetEventId = naddr
+          break
+        }
+      }
     }
   }
 

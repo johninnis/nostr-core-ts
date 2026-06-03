@@ -172,6 +172,28 @@ Deno.test("transformEvent - generic repost returns repost kindData", () => {
   assertEquals(result.kindData.repost.originalEventId, eid2)
 })
 
+Deno.test("transformEvent - generic repost falls back to the a-tag coordinate when no e-tag", () => {
+  const coord = formatAddressableRef({ kind: KIND_LONGFORM, pubkey: pk1, dTag: "my-article" })
+  const raw = makeEvent({ kind: KIND_GENERIC_REPOST, tags: [["a", coord], ["k", "30023"]] })
+  const result = transformEvent(raw)
+  assertExists(result.kindData.repost)
+  assertEquals(
+    result.kindData.repost.originalEventId,
+    encodeNaddr({ kind: KIND_LONGFORM, pubkey: pk1, dTag: "my-article" }),
+  )
+})
+
+Deno.test("transformEvent - reaction falls back to the a-tag coordinate when no e-tag", () => {
+  const coord = formatAddressableRef({ kind: KIND_LONGFORM, pubkey: pk1, dTag: "my-article" })
+  const raw = makeEvent({ kind: KIND_REACTION, content: "🔥", tags: [["a", coord], ["k", "30023"]] })
+  const result = transformEvent(raw)
+  assertExists(result.kindData.reaction)
+  assertEquals(
+    result.kindData.reaction.targetEventId,
+    encodeNaddr({ kind: KIND_LONGFORM, pubkey: pk1, dTag: "my-article" }),
+  )
+})
+
 Deno.test("transformEvent - reaction returns reaction kindData with default +", () => {
   const raw = makeEvent({
     kind: KIND_REACTION,

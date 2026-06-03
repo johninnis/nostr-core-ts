@@ -29,7 +29,7 @@ export {
   buildTextNote,
   buildZapRequest,
 } from "./builder.ts"
-export type { BuildLongformInput, DeletionTarget, ReplyContext } from "./builder.ts"
+export type { BuildLongformInput, DeletionTarget, EngagementTarget, ReplyContext } from "./builder.ts"
 export { buildReplaceableListEvent } from "./replaceable-list.ts"
 export type {
   BuildReplaceableListEventInput,
