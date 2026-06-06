@@ -1,5 +1,5 @@
 import { assert, assertEquals } from "@std/assert"
-import { buildReplaceableListEvent } from "../../src/domain/service/replaceable-list.ts"
+import { buildNewListEvent, buildReplaceableListEvent } from "../../src/domain/service/replaceable-list.ts"
 import { EncryptionError } from "../../src/domain/exception/encryption-error.ts"
 import type { Signer } from "../../src/domain/service/signer.ts"
 import { failure, isFailure, isOk, ok } from "../../src/domain/value-object/result.ts"
@@ -176,6 +176,96 @@ Deno.test("private write returns Failure(EncryptionError) when nip44Encrypt fail
   assert(result.error instanceof EncryptionError)
   assertEquals(result.error.cause?.tag, "signer-failed")
   assertEquals(result.error.message.startsWith("buildReplaceableListEvent: signer-failed:"), true)
+})
+
+Deno.test("buildNewListEvent - empty public list carries just the d-tag and empty content", async () => {
+  const result = await buildNewListEvent({
+    kind: 30000,
+    dTag: "friends",
+    visibility: "public",
+    signer: makeSigner(),
+    authorPubkey: AUTHOR,
+    createdAt: 1700000000,
+  })
+
+  assert(isOk(result))
+  assertEquals(result.value.template.tags, [["d", "friends"]])
+  assertEquals(result.value.template.content, "")
+  assertEquals(result.value.privateTags, [])
+})
+
+Deno.test("buildNewListEvent - empty private list encrypts empty entries", async () => {
+  const result = await buildNewListEvent({
+    kind: 30000,
+    dTag: "secret",
+    visibility: "private",
+    signer: makeSigner(),
+    authorPubkey: AUTHOR,
+    createdAt: 1700000000,
+  })
+
+  assert(isOk(result))
+  assertEquals(result.value.template.tags, [["d", "secret"]])
+  assertEquals(result.value.template.content, "enc:[]")
+  assertEquals(result.value.privateTags, [])
+})
+
+Deno.test("buildNewListEvent - public entries go in tags alongside the d-tag", async () => {
+  const result = await buildNewListEvent({
+    kind: 30000,
+    dTag: "friends",
+    visibility: "public",
+    entries: [["p", TARGET]],
+    signer: makeSigner(),
+    authorPubkey: AUTHOR,
+    createdAt: 1700000000,
+  })
+
+  assert(isOk(result))
+  assertEquals(result.value.template.tags, [["d", "friends"], ["p", TARGET]])
+  assertEquals(result.value.template.content, "")
+  assertEquals(result.value.privateTags, [])
+})
+
+Deno.test("buildNewListEvent - private entries are encrypted, only d-tag stays public", async () => {
+  const result = await buildNewListEvent({
+    kind: 30000,
+    dTag: "secret",
+    visibility: "private",
+    entries: [["p", TARGET]],
+    signer: makeSigner(),
+    authorPubkey: AUTHOR,
+    createdAt: 1700000000,
+  })
+
+  assert(isOk(result))
+  assertEquals(result.value.template.tags, [["d", "secret"]])
+  assertEquals(result.value.template.content, `enc:[["p","${TARGET}"]]`)
+  assertEquals(result.value.privateTags, [["p", TARGET]])
+})
+
+Deno.test("buildNewListEvent - returns Failure(EncryptionError) when nip44Encrypt fails", async () => {
+  const failingSigner: Signer = {
+    kind: "local",
+    getPublicKey: () => Promise.resolve(AUTHOR),
+    signEvent: () => Promise.reject(new Error("not exercised")),
+    nip04Encrypt: () => Promise.resolve(ok("")),
+    nip04Decrypt: () => Promise.resolve(ok("")),
+    nip44Encrypt: () => Promise.resolve(failure(new SignerError("encrypt-failed", "underlying signer refused"))),
+    nip44Decrypt: () => Promise.resolve(ok("")),
+  }
+  const result = await buildNewListEvent({
+    kind: 30000,
+    dTag: "secret",
+    visibility: "private",
+    signer: failingSigner,
+    authorPubkey: AUTHOR,
+    createdAt: 1700000000,
+  })
+
+  assert(isFailure(result))
+  assert(result.error instanceof EncryptionError)
+  assertEquals(result.error.message.startsWith("buildNewListEvent: signer-failed:"), true)
 })
 
 Deno.test("createdAt is set on the template", async () => {

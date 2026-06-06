@@ -30,8 +30,10 @@ export {
   buildZapRequest,
 } from "./builder.ts"
 export type { BuildLongformInput, DeletionTarget, EngagementTarget, ReplyContext } from "./builder.ts"
-export { buildReplaceableListEvent } from "./replaceable-list.ts"
+export { buildNewListEvent, buildReplaceableListEvent } from "./replaceable-list.ts"
 export type {
+  BuildNewListEventInput,
+  BuildNewListEventResult,
   BuildReplaceableListEventInput,
   BuildReplaceableListEventResult,
   ListVisibility,
