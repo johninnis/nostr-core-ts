@@ -19,3 +19,15 @@ export const isString = (value: unknown): value is string => typeof value === "s
 /** Type guard accepting `undefined` or a `string`; convenient for optional-string fields on validated record shapes. */
 export const isOptionalString = (value: unknown): value is string | undefined =>
   value === undefined || typeof value === "string"
+
+// Unlike `isString` / `isNumber` (kept internal — exact synonyms for an inline `typeof`), the array
+// guards earn a public spot like `isRecord`: they are composite (`Array.isArray` + per-element check)
+// and easy to hand-roll subtly wrong, so they deserve one shared implementation.
+
+/** Type guard for an array whose every element is a `string` (an empty array passes). */
+export const isStringArray = (value: unknown): value is ReadonlyArray<string> =>
+  Array.isArray(value) && value.every(isString)
+
+/** Type guard for an array whose every element is a `number` (an empty array passes). */
+export const isNumberArray = (value: unknown): value is ReadonlyArray<number> =>
+  Array.isArray(value) && value.every(isNumber)

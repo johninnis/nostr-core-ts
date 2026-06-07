@@ -1,5 +1,5 @@
 export { formatHex, hexRegex, parseHex } from "./hex.ts"
-export { isRecord } from "./guards.ts"
+export { isNumberArray, isRecord, isStringArray } from "./guards.ts"
 export { tryParseJson } from "./json.ts"
 
 export type { Brand, BrandSpec, BrandTools, HexBrandSpec } from "./brand.ts"

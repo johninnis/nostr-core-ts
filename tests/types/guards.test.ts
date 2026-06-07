@@ -1,5 +1,5 @@
 import { assertEquals } from "@std/assert"
-import { isRecord } from "../../src/domain/value-object/guards.ts"
+import { isNumberArray, isRecord, isStringArray } from "../../src/domain/value-object/guards.ts"
 import { isValidTag } from "../../src/domain/value-object/nostr-event.ts"
 
 Deno.test("isRecord - true for plain objects", () => {
@@ -21,6 +21,28 @@ Deno.test("isRecord - false for primitives", () => {
   assertEquals(isRecord(42), false)
   assertEquals(isRecord(true), false)
   assertEquals(isRecord(undefined), false)
+})
+
+Deno.test("isStringArray - true for an all-string array and empty array", () => {
+  assertEquals(isStringArray([]), true)
+  assertEquals(isStringArray(["a", "b"]), true)
+})
+
+Deno.test("isStringArray - false when any element is not a string, or value is not an array", () => {
+  assertEquals(isStringArray(["a", 1]), false)
+  assertEquals(isStringArray("a"), false)
+  assertEquals(isStringArray(null), false)
+})
+
+Deno.test("isNumberArray - true for an all-number array and empty array", () => {
+  assertEquals(isNumberArray([]), true)
+  assertEquals(isNumberArray([1, 2]), true)
+})
+
+Deno.test("isNumberArray - false when any element is not a number, or value is not an array", () => {
+  assertEquals(isNumberArray([1, "2"]), false)
+  assertEquals(isNumberArray(42), false)
+  assertEquals(isNumberArray(null), false)
 })
 
 Deno.test("isValidTag - true for a single-string tag", () => {
