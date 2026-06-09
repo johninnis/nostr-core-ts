@@ -21,9 +21,19 @@ export interface UnsignedEvent {
   readonly created_at: number
 }
 
-/** A NIP-01 signed event — `UnsignedEvent` plus the branded `id` / `pubkey` / `sig` fields produced by signing. */
-export interface NostrEvent extends UnsignedEvent {
+/**
+ * An event with a stable identity but no signature — `UnsignedEvent` plus `id` and `pubkey`.
+ * This is the honest type for a NIP-17 rumor: unsigned by design, identified by its own computed
+ * NIP-01 id. The render/transform pipeline accepts this so an unsigned rumor renders through the
+ * same path as a signed event. `NostrEvent` is assignable to it — prefer `NostrEvent` everywhere an
+ * event is genuinely signed; reach for `RenderableEvent` only where an unsigned rumor may appear.
+ */
+export interface RenderableEvent extends UnsignedEvent {
   readonly id: EventId
   readonly pubkey: PublicKey
+}
+
+/** A NIP-01 signed event — `RenderableEvent` plus the branded `sig` field produced by signing. */
+export interface NostrEvent extends RenderableEvent {
   readonly sig: Sig
 }

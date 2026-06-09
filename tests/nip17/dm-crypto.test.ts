@@ -205,9 +205,8 @@ Deno.test({
       signer,
       ephemeralSignerFactory: mockEphemeralSignerFactory,
       generateSecretKey: mockGenerateSecretKey,
-      content: "hello there",
+      rumor: { kind: 14, pubkey: PUBKEY_A, created_at: 1700000000, tags: [["p", PUBKEY_B]], content: "hello there" },
       recipientPubkey: PUBKEY_B,
-      myPubkey: PUBKEY_A,
     })
 
     assertEquals(result.success, true)
@@ -296,9 +295,8 @@ Deno.test({
       signer,
       ephemeralSignerFactory: () => signer,
       generateSecretKey: () => new Uint8Array(32),
-      content: "hi",
+      rumor: { kind: 14, pubkey: PUBKEY_A, created_at: 1700000000, tags: [["p", PUBKEY_B]], content: "hi" },
       recipientPubkey: PUBKEY_B,
-      myPubkey: PUBKEY_A,
     })
     assertEquals(result.success, false)
     if (!result.success) assertEquals(result.error instanceof EncryptionError, true)

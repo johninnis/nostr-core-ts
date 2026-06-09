@@ -75,7 +75,7 @@ console.log("nprofile(bob): ", encodeNprofile(bob.pubkey, [aliceRelay]))
 // 4. Reaction + filter matching (no relay needed).
 banner("4. Reaction + matchesFilter")
 const reaction = await bob.signer.signEvent(
-  buildReaction(signedNote.id, alice.pubkey),
+  buildReaction({ eventId: signedNote.id, pubkey: alice.pubkey, kind: signedNote.kind }),
 )
 console.log(
   "matches { kinds: [1] }:",
@@ -102,9 +102,14 @@ const wrapsResult = await buildDmGiftWraps({
   signer: alice.signer,
   ephemeralSignerFactory: (sk) => createLocalSigner(sk),
   generateSecretKey,
-  content: "psst — this is a kind-14 rumor inside a kind-1059 wrap",
+  rumor: {
+    kind: 14,
+    pubkey: alice.pubkey,
+    created_at: now(),
+    tags: [["p", bob.pubkey]],
+    content: "psst — this is a kind-14 rumor inside a kind-1059 wrap",
+  },
   recipientPubkey: bob.pubkey,
-  myPubkey: alice.pubkey,
 })
 if (!wrapsResult.success) throw wrapsResult.error
 const wraps = wrapsResult.value

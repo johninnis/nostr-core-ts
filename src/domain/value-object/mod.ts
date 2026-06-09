@@ -14,7 +14,7 @@ export { InvalidNip05IdError, isValidNip05Id, parseNip05Id } from "./nip05-id.ts
 export type { Sig } from "./sig.ts"
 export { InvalidSigError, isValidSig, parseSig } from "./sig.ts"
 
-export type { NostrEvent, Tag, UnsignedEvent } from "./nostr-event.ts"
+export type { NostrEvent, RenderableEvent, Tag, UnsignedEvent } from "./nostr-event.ts"
 export { isValidTag, isValidTagsArray } from "./nostr-event.ts"
 
 export type { NostrFilter } from "./nostr-filter.ts"

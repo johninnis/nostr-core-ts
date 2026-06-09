@@ -1,6 +1,6 @@
 import type { EventId } from "../value-object/event-id.ts"
 import { isValidEventId } from "../value-object/event-id.ts"
-import type { NostrEvent, Tag } from "../value-object/nostr-event.ts"
+import type { RenderableEvent, Tag } from "../value-object/nostr-event.ts"
 import {
   KIND_COMMENT,
   KIND_GENERIC_REPOST,
@@ -77,7 +77,7 @@ interface KindData {
 
 /** Result of `transformEvent` — the raw event, its derived reference graph (`refs`), and any kind-specific projection (`kindData`). */
 interface TransformedEvent {
-  readonly raw: NostrEvent
+  readonly raw: RenderableEvent
   readonly refs: EventRefs
   readonly kindData: KindData
 }
@@ -93,7 +93,7 @@ const encodeAddressTag = (value: string): string | null => {
  * addressable (parameterised-replaceable) event with a `d` tag, otherwise the hex event id. This is
  * the inverse of {@link encodeAddressTag} and the value `buildRefs` produces for a reply's parent.
  */
-export const replyTargetRef = (event: NostrEvent): EventOrAddressRef => {
+export const replyTargetRef = (event: RenderableEvent): EventOrAddressRef => {
   if (isParameterisedReplaceable(event.kind)) {
     const dTag = getTagValue(event.tags, "d") ?? ""
     if (dTag) return encodeNaddr({ kind: event.kind, pubkey: event.pubkey, dTag })
@@ -101,7 +101,7 @@ export const replyTargetRef = (event: NostrEvent): EventOrAddressRef => {
   return event.id
 }
 
-const buildRefs = (raw: NostrEvent): EventRefs => {
+const buildRefs = (raw: RenderableEvent): EventRefs => {
   const tags: ReadonlyArray<Tag> = raw.tags
   const isComment = raw.kind === KIND_COMMENT
   let rootEvent: EventOrAddressRef | null = null
@@ -175,7 +175,7 @@ const buildRefs = (raw: NostrEvent): EventRefs => {
   }
 }
 
-const buildKindData = (kind: number, raw: NostrEvent): KindData => {
+const buildKindData = (kind: number, raw: RenderableEvent): KindData => {
   if (kind === KIND_REPOST || kind === KIND_GENERIC_REPOST) return buildRepostKindData(raw)
   if (kind === KIND_REACTION) return buildReactionKindData(raw)
   if (kind === KIND_HIGHLIGHT) return buildHighlightKindData(raw)
@@ -183,7 +183,7 @@ const buildKindData = (kind: number, raw: NostrEvent): KindData => {
   return {}
 }
 
-const buildRepostKindData = (raw: NostrEvent): KindData => {
+const buildRepostKindData = (raw: RenderableEvent): KindData => {
   let originalEventId: EventOrAddressRef | null = null
 
   for (const tag of raw.tags) {
@@ -207,7 +207,7 @@ const buildRepostKindData = (raw: NostrEvent): KindData => {
   return { repost: { originalEventId } }
 }
 
-const buildReactionKindData = (raw: NostrEvent): KindData => {
+const buildReactionKindData = (raw: RenderableEvent): KindData => {
   const tags = raw.tags
   let targetEventId: EventOrAddressRef | null = null
 
@@ -239,7 +239,7 @@ const buildReactionKindData = (raw: NostrEvent): KindData => {
   }
 }
 
-const buildHighlightKindData = (raw: NostrEvent): KindData => {
+const buildHighlightKindData = (raw: RenderableEvent): KindData => {
   let context: string | null = null
   let comment: string | null = null
   let sourceUrl: string | null = null
@@ -270,7 +270,7 @@ const buildHighlightKindData = (raw: NostrEvent): KindData => {
   }
 }
 
-const buildLongformKindData = (raw: NostrEvent): KindData => {
+const buildLongformKindData = (raw: RenderableEvent): KindData => {
   const tags = raw.tags
   let title: string | null = null
   let summary: string | null = null
@@ -294,8 +294,8 @@ const buildLongformKindData = (raw: NostrEvent): KindData => {
   }
 }
 
-/** Decorate a `NostrEvent` with derived reference data (root/reply/mentions) and kind-specific projections. */
-export const transformEvent = (raw: NostrEvent): TransformedEvent => ({
+/** Decorate a `RenderableEvent` with derived reference data (root/reply/mentions) and kind-specific projections. */
+export const transformEvent = (raw: RenderableEvent): TransformedEvent => ({
   raw,
   refs: buildRefs(raw),
   kindData: buildKindData(raw.kind, raw),

@@ -4,7 +4,7 @@ import type { EventToSign } from "../../domain/service/event-id.ts"
 import { decryptJson, encryptJson } from "../../domain/service/json-crypto.ts"
 import type { Signer } from "../../domain/service/signer.ts"
 import { isRecord } from "../../domain/value-object/guards.ts"
-import { KIND_GIFT_WRAP, KIND_PRIVATE_MESSAGE, KIND_SEAL } from "../../domain/value-object/kinds.ts"
+import { KIND_GIFT_WRAP, KIND_PRIVATE_MESSAGE, KIND_REACTION, KIND_SEAL } from "../../domain/value-object/kinds.ts"
 import type { NostrEvent, UnsignedEvent } from "../../domain/value-object/nostr-event.ts"
 import { isValidTag } from "../../domain/value-object/nostr-event.ts"
 import type { PublicKey } from "../../domain/value-object/public-key.ts"
@@ -102,11 +102,11 @@ export const unwrapGiftWrap = async (
   if (!rumor) {
     return failure(new GiftWrapUnwrapError("rumor-malformed", "Rumor payload is not a valid rumor shape"))
   }
-  if (rumor.kind !== KIND_PRIVATE_MESSAGE) {
+  if (rumor.kind !== KIND_PRIVATE_MESSAGE && rumor.kind !== KIND_REACTION) {
     return failure(
       new GiftWrapUnwrapError(
         "rumor-wrong-kind",
-        `Rumor kind ${rumor.kind} is not the expected private-message kind (14)`,
+        `Rumor kind ${rumor.kind} is not a private message (14) or reaction (7)`,
       ),
     )
   }
@@ -165,22 +165,24 @@ const buildGiftWrapFor = async (
   return ok({ event: giftWrap, targetPubkey })
 }
 
-/** Input for `buildDmGiftWraps` — the user-facing signer, an ephemeral-signer factory + key generator (used for the per-wrap throwaway keys NIP-17 requires), the message content, the recipient pubkey, and the sender's own pubkey. */
+/** Input for `buildDmGiftWraps` — the user-facing signer, an ephemeral-signer factory + key generator (used for the per-wrap throwaway keys NIP-17 requires), the rumor to wrap (its `pubkey` is the sender), and the recipient pubkey. */
 export interface BuildDmGiftWrapsInput {
   readonly signer: Signer
   readonly ephemeralSignerFactory: (secretKey: Uint8Array) => Signer
   readonly generateSecretKey: () => Uint8Array
-  readonly content: string
+  /** The NIP-17 rumor to wrap — a kind-14 message, a kind-7 reaction, or any other private payload. Its `pubkey` is the sender, who receives the second wrap. */
+  readonly rumor: Rumor
   readonly recipientPubkey: PublicKey
-  readonly myPubkey: PublicKey
-  /** Clock used for the rumor's `created_at` and the (jittered) seal/gift-wrap timestamps. Defaults to {@link now}. */
+  /** Clock used for the (jittered) seal/gift-wrap timestamps. Defaults to {@link now}. */
   readonly clock?: Clock
   /** RNG used to compute the seal/gift-wrap timestamp jitter (NIP-17 §5). Defaults to the web-crypto-backed `randomUint32`. */
   readonly randomUint32?: RandomUint32Fn
 }
 
 /**
- * Build the pair of NIP-17 gift wraps (one for the recipient, one for the sender) for a kind-14 DM.
+ * Build the pair of NIP-17 gift wraps (one for the recipient, one for the sender) for any rumor —
+ * a kind-14 message, a kind-7 reaction, or other private payload. The caller constructs the rumor;
+ * this wraps it to both parties so it stays private and self-readable.
  *
  * **Error contract — two paths, matching the Signer split.** Encryption failures (the user-facing
  * signer's `nip44Encrypt` or the ephemeral signer's encrypt of the seal) are returned as
@@ -197,21 +199,14 @@ export interface BuildDmGiftWrapsInput {
 export const buildDmGiftWraps = async (
   input: BuildDmGiftWrapsInput,
 ): Promise<Result<ReadonlyArray<GiftWrapTarget>, EncryptionError>> => {
-  const { signer, ephemeralSignerFactory, generateSecretKey, content, recipientPubkey, myPubkey } = input
+  const { signer, ephemeralSignerFactory, generateSecretKey, rumor, recipientPubkey } = input
   const clock = input.clock ?? now
   const randomUint32 = input.randomUint32 ?? defaultRandomUint32
-  const rumor: Rumor = {
-    kind: KIND_PRIVATE_MESSAGE,
-    pubkey: myPubkey,
-    created_at: clock(),
-    tags: [["p", recipientPubkey]],
-    content,
-  }
 
   const wrap = (targetPubkey: PublicKey): Promise<Result<GiftWrapTarget, EncryptionError>> =>
     buildGiftWrapFor({ signer, ephemeralSignerFactory, generateSecretKey, rumor, targetPubkey, clock, randomUint32 })
 
-  const [recipient, sender] = await Promise.all([wrap(recipientPubkey), wrap(myPubkey)])
+  const [recipient, sender] = await Promise.all([wrap(recipientPubkey), wrap(rumor.pubkey)])
   if (!recipient.success) return recipient
   if (!sender.success) return sender
   return ok([recipient.value, sender.value])
