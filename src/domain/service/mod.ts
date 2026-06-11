@@ -100,7 +100,7 @@ export type {
 } from "./transformer.ts"
 
 export { DEFAULT_REACTION, formatReactionEmoji } from "./reaction.ts"
-export { parseAmountSats, parseBolt11Amount, parseNutzap, parseZapReceipt } from "./zap-parser.ts"
+export { parseBolt11Amount, parseNutzap, parseZapReceipt } from "./zap-parser.ts"
 export type { ZapInfo } from "./zap-parser.ts"
 export {
   buildFileMetadataEvent,
