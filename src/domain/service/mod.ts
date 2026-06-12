@@ -46,7 +46,8 @@ export type { EventStructureCheck, EventStructureField, ParsedNostrInput } from 
 export { computeSha256, sha256Hex } from "./sha256.ts"
 export { verifyEventSignature } from "./verify.ts"
 
-export { matchesAnyFilter, matchesFilter } from "./filter.ts"
+export { compileFilter, compileFilters, matchesAnyFilter, matchesFilter } from "./filter.ts"
+export type { CompiledFilter } from "./filter.ts"
 export { hashFilters } from "./filter-hash.ts"
 export { byCreatedAtAsc, byCreatedAtDesc } from "./sort.ts"
 
