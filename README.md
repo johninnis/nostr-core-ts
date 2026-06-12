@@ -234,7 +234,7 @@ App-policy concerns (a `DmCache`, a `DmService` orchestrating live + historical 
 
 ### NIP-11 relay information — `src/infrastructure/adapter/nip11-adapter.ts`
 
-`fetchRelayInformation(httpClient, relayHttpUrl)` reads the NIP-11 document via the `HttpClient` port. Use `wsToHttp(url)` (from the value-object barrel) to derive the http URL from a relay's `wss://` URL. Returns `Result<RelayInformation, Nip11FetchError>` — see the Errors section for the tag union.
+`fetchRelayInformation(httpClient, relayHttpUrl, options?)` reads the NIP-11 document via the `HttpClient` port. Use `wsToHttp(url)` (from the value-object barrel) to derive the http URL from a relay's `wss://` URL. `options` takes `timeoutMs` (defaults to `DEFAULT_NIP11_TIMEOUT_MS`, 10 s — the same ceiling as the NIP-05 resolver) and an `AbortSignal`. Returns `Result<RelayInformation, Nip11FetchError>` — see the Errors section for the tag union.
 
 ### Errors
 

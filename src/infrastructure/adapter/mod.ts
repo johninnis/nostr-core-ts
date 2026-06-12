@@ -10,4 +10,5 @@ export {
   nip44Decrypt,
   nip44Encrypt,
 } from "./nip44-adapter.ts"
-export { fetchRelayInformation } from "./nip11-adapter.ts"
+export { DEFAULT_NIP11_TIMEOUT_MS, fetchRelayInformation } from "./nip11-adapter.ts"
+export type { FetchRelayInformationOptions } from "./nip11-adapter.ts"

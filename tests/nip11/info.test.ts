@@ -5,7 +5,7 @@ import { Nip11FetchError } from "../../src/application/exception/nip11-fetch-err
 import { isRelayInformation } from "../../src/domain/value-object/nip11-info.ts"
 import { wsToHttp } from "../../src/domain/value-object/relay-url.ts"
 import { failure, ok } from "../../src/domain/value-object/result.ts"
-import { fetchRelayInformation } from "../../src/infrastructure/adapter/nip11-adapter.ts"
+import { DEFAULT_NIP11_TIMEOUT_MS, fetchRelayInformation } from "../../src/infrastructure/adapter/nip11-adapter.ts"
 
 Deno.test("wsToHttp - rewrites wss:// to https://", () => {
   assertEquals(wsToHttp("wss://relay.example"), "https://relay.example")
@@ -114,4 +114,32 @@ Deno.test("isRelayInformation - false when a string field has the wrong type", (
 
 Deno.test("isRelayInformation - false when supported_nips contains a non-number", () => {
   assertEquals(isRelayInformation({ supported_nips: [1, "two"] }), false)
+})
+
+Deno.test("fetchRelayInformation - forwards options.timeoutMs and options.signal to the HttpClient request", async () => {
+  let capturedTimeout: number | undefined
+  let capturedSignal: AbortSignal | undefined
+  const httpClient: HttpClient = {
+    request: (input) => {
+      capturedTimeout = input.timeoutMs
+      capturedSignal = input.signal
+      return Promise.resolve(ok(makeMockResponse({})))
+    },
+  }
+  const controller = new AbortController()
+  await fetchRelayInformation(httpClient, "https://relay.example", { timeoutMs: 1234, signal: controller.signal })
+  assertEquals(capturedTimeout, 1234)
+  assertEquals(capturedSignal, controller.signal)
+})
+
+Deno.test("fetchRelayInformation - uses DEFAULT_NIP11_TIMEOUT_MS when options.timeoutMs is omitted", async () => {
+  let captured: number | undefined
+  const httpClient: HttpClient = {
+    request: (input) => {
+      captured = input.timeoutMs
+      return Promise.resolve(ok(makeMockResponse({})))
+    },
+  }
+  await fetchRelayInformation(httpClient, "https://relay.example")
+  assertEquals(captured, DEFAULT_NIP11_TIMEOUT_MS)
 })
