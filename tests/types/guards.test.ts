@@ -1,6 +1,8 @@
 import { assertEquals } from "@std/assert"
-import { isNumberArray, isRecord, isStringArray } from "../../src/domain/value-object/guards.ts"
+import { isArrayOf, isNumberArray, isRecord, isStringArray } from "../../src/domain/value-object/guards.ts"
 import { isValidTag } from "../../src/domain/value-object/nostr-event.ts"
+
+const isString = (value: unknown): value is string => typeof value === "string"
 
 Deno.test("isRecord - true for plain objects", () => {
   assertEquals(isRecord({}), true)
@@ -21,6 +23,17 @@ Deno.test("isRecord - false for primitives", () => {
   assertEquals(isRecord(42), false)
   assertEquals(isRecord(true), false)
   assertEquals(isRecord(undefined), false)
+})
+
+Deno.test("isArrayOf - true for an array whose every element passes the guard, and for empty", () => {
+  assertEquals(isArrayOf([], isString), true)
+  assertEquals(isArrayOf(["a", "b"], isString), true)
+})
+
+Deno.test("isArrayOf - false when any element fails the guard, or the value is not an array", () => {
+  assertEquals(isArrayOf(["a", 1], isString), false)
+  assertEquals(isArrayOf("a", isString), false)
+  assertEquals(isArrayOf(null, isString), false)
 })
 
 Deno.test("isStringArray - true for an all-string array and empty array", () => {

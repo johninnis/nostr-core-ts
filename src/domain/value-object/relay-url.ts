@@ -18,8 +18,6 @@ const canonicaliseRelayUrl = (raw: string): string => {
   } catch {
     return raw.replace(/\/+$/, "")
   }
-  parsed.protocol = parsed.protocol.toLowerCase()
-  parsed.hostname = parsed.hostname.toLowerCase()
   return parsed.toString().replace(/\/+$/, "")
 }
 

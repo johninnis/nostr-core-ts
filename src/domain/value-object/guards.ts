@@ -22,12 +22,18 @@ export const isOptionalString = (value: unknown): value is string | undefined =>
 
 // Unlike `isString` / `isNumber` (kept internal — exact synonyms for an inline `typeof`), the array
 // guards earn a public spot like `isRecord`: they are composite (`Array.isArray` + per-element check)
-// and easy to hand-roll subtly wrong, so they deserve one shared implementation.
+// and easy to hand-roll subtly wrong, so they deserve one shared implementation. `isArrayOf` is that
+// implementation; `isStringArray` / `isNumberArray` are its two common specialisations, and downstream
+// record-array guards (`isArrayOf(value, isConnection)`, …) compose the same primitive.
+
+/** Type guard for an array whose every element satisfies `guard` (an empty array passes). The shared primitive behind every "array of X" check — prefer it over hand-rolling `Array.isArray(value) && value.every(guard)`. */
+export const isArrayOf = <T>(
+  value: unknown,
+  guard: (element: unknown) => element is T,
+): value is ReadonlyArray<T> => Array.isArray(value) && value.every(guard)
 
 /** Type guard for an array whose every element is a `string` (an empty array passes). */
-export const isStringArray = (value: unknown): value is ReadonlyArray<string> =>
-  Array.isArray(value) && value.every(isString)
+export const isStringArray = (value: unknown): value is ReadonlyArray<string> => isArrayOf(value, isString)
 
 /** Type guard for an array whose every element is a `number` (an empty array passes). */
-export const isNumberArray = (value: unknown): value is ReadonlyArray<number> =>
-  Array.isArray(value) && value.every(isNumber)
+export const isNumberArray = (value: unknown): value is ReadonlyArray<number> => isArrayOf(value, isNumber)
