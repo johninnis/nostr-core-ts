@@ -20,11 +20,16 @@ export type {
 } from "./bech32.ts"
 
 export {
+  buildAppSettings,
+  buildClientAuth,
   buildDeletion,
   buildHighlightFromEvent,
   buildHighlightFromUrl,
   buildLongform,
+  buildMetadata,
+  buildPrivateMessage,
   buildReaction,
+  buildRelayList,
   buildRepost,
   buildTextNote,
   buildZapRequest,

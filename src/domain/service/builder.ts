@@ -4,16 +4,22 @@ import type { EventId } from "../value-object/event-id.ts"
 import { isValidEventId } from "../value-object/event-id.ts"
 import type { EventOrAddressRef } from "./transformer.ts"
 import {
+  KIND_APP_SETTINGS,
+  KIND_CLIENT_AUTH,
   KIND_DELETION,
   KIND_GENERIC_REPOST,
   KIND_HIGHLIGHT,
+  KIND_METADATA,
+  KIND_PRIVATE_MESSAGE,
   KIND_REACTION,
+  KIND_RELAY_LIST,
   KIND_REPOST,
   KIND_SHORT_NOTE,
   KIND_ZAP_REQUEST,
 } from "../value-object/kinds.ts"
 import type { NostrEvent, Tag, UnsignedEvent } from "../value-object/nostr-event.ts"
 import type { PublicKey } from "../value-object/public-key.ts"
+import type { RelayUrl } from "../value-object/relay-url.ts"
 import { now } from "../value-object/timestamp.ts"
 import { decodeNostrEntity, NOSTR_ENTITY_REGEX } from "./bech32.ts"
 import { DEFAULT_REACTION } from "./reaction.ts"
@@ -193,6 +199,18 @@ export const buildDeletion = (target: DeletionTarget): UnsignedEvent => {
   return { kind: KIND_DELETION, created_at: now(), tags, content: "" }
 }
 
+/**
+ * Build a kind-22242 NIP-42 client-authentication event responding to a relay's AUTH `challenge`.
+ * Emits the `relay` and `challenge` tags the relay expects; sign it and send it back in an
+ * `["AUTH", <event>]` message. The event is single-use and short-lived — build a fresh one per challenge.
+ */
+export const buildClientAuth = (relay: RelayUrl, challenge: string): UnsignedEvent => ({
+  kind: KIND_CLIENT_AUTH,
+  created_at: now(),
+  tags: [["relay", relay], ["challenge", challenge]],
+  content: "",
+})
+
 /** Build a kind-9802 highlight quoting `text` from `sourceUrl` (NIP-84), optionally with a `comment` tag. */
 export const buildHighlightFromUrl = (
   text: string,
@@ -260,5 +278,44 @@ export const buildLongform = (
   for (const topic of topics ?? []) tags.push(["t", topic])
   return { kind, created_at: createdAt ?? now(), tags, content }
 }
+
+/** Build a kind-0 profile metadata event (NIP-01); `metadata` is serialised as the JSON content (e.g. `name`, `about`, `picture`). */
+export const buildMetadata = (metadata: Record<string, string>): UnsignedEvent => ({
+  kind: KIND_METADATA,
+  created_at: now(),
+  tags: [],
+  content: JSON.stringify(metadata),
+})
+
+/**
+ * Build a kind-14 private direct message rumor (NIP-17): a `p` tag for the recipient and an optional
+ * `q` tag quoting the message being replied to. The returned event is unsigned and carries no `pubkey`
+ * — a rumor is never signed; gift-wrap it via `buildDmGiftWraps` after stamping the author pubkey.
+ */
+export const buildPrivateMessage = (
+  partnerPubkey: PublicKey,
+  content: string,
+  replyToId: EventId | null = null,
+): UnsignedEvent => {
+  const tags: Array<Tag> = [["p", partnerPubkey]]
+  if (replyToId) tags.push(["q", replyToId])
+  return { kind: KIND_PRIVATE_MESSAGE, created_at: now(), tags, content }
+}
+
+/** Build a kind-10002 relay list event (NIP-65) from pre-resolved `r` tags; `content` is unused by the spec and defaults to empty. */
+export const buildRelayList = (tags: ReadonlyArray<Tag>, content: string = ""): UnsignedEvent => ({
+  kind: KIND_RELAY_LIST,
+  created_at: now(),
+  tags,
+  content,
+})
+
+/** Build a kind-30078 app-settings event (NIP-78) addressed by `dTag`; `content` is opaque to the spec (typically the caller's encrypted payload). */
+export const buildAppSettings = (dTag: string, content: string): UnsignedEvent => ({
+  kind: KIND_APP_SETTINGS,
+  created_at: now(),
+  tags: [["d", dTag]],
+  content,
+})
 
 export type { BuildLongformInput, EngagementTarget, ReplyContext }
