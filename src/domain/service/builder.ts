@@ -54,13 +54,11 @@ const extractReferenceTags = (content: string): ReadonlyArray<Tag> => {
     if (decoded.type === "note" && !seenEventIds.has(decoded.eventId)) {
       seenEventIds.add(decoded.eventId)
       tags.push(["q", decoded.eventId])
-      tags.push(["e", decoded.eventId, "", "mention"])
     }
 
     if (decoded.type === "nevent" && !seenEventIds.has(decoded.eventId)) {
       seenEventIds.add(decoded.eventId)
       tags.push(decoded.pubkey ? ["q", decoded.eventId, "", decoded.pubkey] : ["q", decoded.eventId])
-      tags.push(["e", decoded.eventId, "", "mention"])
       if (decoded.pubkey && !seenPubkeys.has(decoded.pubkey)) {
         seenPubkeys.add(decoded.pubkey)
         tags.push(["p", decoded.pubkey])
@@ -137,8 +135,8 @@ export const buildTextNote = (
   for (const tag of extractReferenceTags(content)) {
     const value = tag[1]
     if (value === undefined) continue
-    // `hasTag` matches on `(name, value)`, so an existing `["e", id, "", "root"]` from the reply
-    // context correctly blocks an `["e", id, "", "mention"]` added from a body reference.
+    // `hasTag` matches on `(name, value)`, so a `q` or `p` already added by the reply
+    // context blocks a duplicate of the same reference parsed out of the body.
     if (hasTag(tags, tag[0], value)) continue
     tags.push(tag)
   }

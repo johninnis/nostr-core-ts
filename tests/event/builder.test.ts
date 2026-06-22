@@ -211,23 +211,23 @@ Deno.test("buildTextNote - adds a p-tag for an embedded npub reference", () => {
   if (!pTags.some((t) => t[1] === pubkey)) throw new Error("expected p tag for npub")
 })
 
-Deno.test("buildTextNote - adds q + e tags for an embedded note reference", () => {
+Deno.test("buildTextNote - adds a q tag (no e mention) for an embedded note reference", () => {
   const eventId = parseEventId("2".repeat(64))
   const note = encodeEventIdToNote(eventId)
   const event = buildTextNote(`see nostr:${note}`)
   const qTags = event.tags.filter((t) => t[0] === "q")
   const eTags = event.tags.filter((t) => t[0] === "e")
   if (!qTags.some((t) => t[1] === eventId)) throw new Error("expected q tag")
-  if (!eTags.some((t) => t[1] === eventId && t[3] === "mention")) throw new Error("expected e mention tag")
+  if (eTags.length > 0) throw new Error("quoted events are q-only per NIP-18; no e mention tag")
 })
 
-Deno.test("buildTextNote - adds q, e, and p tags for an embedded nevent reference", () => {
+Deno.test("buildTextNote - adds q and p tags (no e mention) for an embedded nevent reference", () => {
   const eventId = parseEventId("3".repeat(64))
   const pubkey = parsePublicKey("4".repeat(64))
   const nevent = encodeNevent(eventId, { authorPubkey: pubkey })
   const event = buildTextNote(`x nostr:${nevent}`)
   if (!event.tags.some((t) => t[0] === "q" && t[1] === eventId)) throw new Error("expected q tag")
-  if (!event.tags.some((t) => t[0] === "e" && t[1] === eventId)) throw new Error("expected e tag")
+  if (event.tags.some((t) => t[0] === "e")) throw new Error("quoted events are q-only per NIP-18; no e tag")
   if (!event.tags.some((t) => t[0] === "p" && t[1] === pubkey)) throw new Error("expected p tag")
 })
 
