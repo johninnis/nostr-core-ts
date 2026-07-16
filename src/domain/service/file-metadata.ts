@@ -84,9 +84,12 @@ const imetaFields = (tag: Tag): ReadonlyArray<readonly [string, string]> =>
     return boundary === -1 ? [] : [[entry.slice(0, boundary), entry.slice(boundary + 1)] as const]
   })
 
+/** Parse a NIP-94 tag list (`["url", …], ["m", …], …`) into a `FileMetadata`; returns `null` when no `url` tag is present. The tag shape shared by kind-1063 events and BUD-08 `nip94` blob-descriptor fields. */
+export const parseFileMetadataTags = (tags: ReadonlyArray<Tag>): FileMetadata | null => fromFields(tagFields(tags))
+
 /** Parse a kind-1063 file-metadata event (NIP-94) into a `FileMetadata`; returns `null` if `event` isn't a 1063 or carries no `url`. */
 export const parseFileMetadataEvent = (event: NostrEvent): FileMetadata | null =>
-  event.kind === KIND_FILE_METADATA ? fromFields(tagFields(event.tags)) : null
+  event.kind === KIND_FILE_METADATA ? parseFileMetadataTags(event.tags) : null
 
 /** Parse a single NIP-92 `imeta` tag into a `FileMetadata`; returns `null` if `tag` isn't an `imeta` tag or carries no `url`. */
 export const parseImetaTag = (tag: Tag): FileMetadata | null => tag[0] === "imeta" ? fromFields(imetaFields(tag)) : null

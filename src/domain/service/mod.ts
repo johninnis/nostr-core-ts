@@ -112,6 +112,7 @@ export {
   buildFileMetadataEvent,
   buildImetaTag,
   parseFileMetadataEvent,
+  parseFileMetadataTags,
   parseImetaTag,
   parseImetaTags,
 } from "./file-metadata.ts"

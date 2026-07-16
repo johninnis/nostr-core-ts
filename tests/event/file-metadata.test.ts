@@ -4,6 +4,7 @@ import {
   buildImetaTag,
   type FileMetadata,
   parseFileMetadataEvent,
+  parseFileMetadataTags,
   parseImetaTag,
   parseImetaTags,
 } from "../../src/domain/service/file-metadata.ts"
@@ -62,6 +63,14 @@ Deno.test("parseFileMetadataEvent - omits a non-integer size", () => {
 Deno.test("parseFileMetadataEvent - ignores value-less tags", () => {
   const event = makeEvent(KIND_FILE_METADATA, [["url", "https://example.com/a.jpg"], ["alt"]])
   assertEquals(parseFileMetadataEvent(event), { url: "https://example.com/a.jpg" })
+})
+
+Deno.test("parseFileMetadataTags - parses every field from a NIP-94 tag list", () => {
+  assertEquals(parseFileMetadataTags(buildFileMetadataEvent(fullMetadata).tags), fullMetadata)
+})
+
+Deno.test("parseFileMetadataTags - returns null when no url tag is present", () => {
+  assertEquals(parseFileMetadataTags([["m", "image/jpeg"], ["dim", "800x600"]]), null)
 })
 
 Deno.test("parseImetaTag - returns null for a non-imeta tag", () => {
