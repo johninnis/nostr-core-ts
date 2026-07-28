@@ -22,18 +22,9 @@ import type { PublicKey } from "../value-object/public-key.ts"
 import type { RelayUrl } from "../value-object/relay-url.ts"
 import { now } from "../value-object/timestamp.ts"
 import { decodeNostrEntity, NOSTR_ENTITY_REGEX } from "./bech32.ts"
+import { extractHashtags } from "./hashtag.ts"
 import { DEFAULT_REACTION } from "./reaction.ts"
 import { hasPubkey, hasTag } from "./tags.ts"
-
-const extractHashtagsFromContent = (content: string): ReadonlyArray<string> => {
-  const matches = content.matchAll(/(?<![&\w])#([a-zA-Z0-9_]+)/gu)
-  const tags = new Set<string>()
-  for (const match of matches) {
-    const tag = match[1]
-    if (tag) tags.add(tag.toLowerCase())
-  }
-  return [...tags]
-}
 
 const extractReferenceTags = (content: string): ReadonlyArray<Tag> => {
   const tags: Array<Tag> = []
@@ -141,7 +132,7 @@ export const buildTextNote = (
     tags.push(tag)
   }
 
-  for (const t of extractHashtagsFromContent(content)) tags.push(["t", t])
+  for (const t of extractHashtags(content)) tags.push(["t", t])
   return { kind: KIND_SHORT_NOTE, created_at: createdAt ?? now(), tags, content }
 }
 
