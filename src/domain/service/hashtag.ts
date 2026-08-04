@@ -1,3 +1,5 @@
+import type { NostrEvent } from "../value-object/nostr-event.ts"
+
 /**
  * Matches a hashtag in event content: a `#` followed by one or more ASCII word characters, not
  * preceded by another word character (so `foo#bar` is not a hashtag) or by `&` (so the `#` of an
@@ -31,4 +33,26 @@ export const extractHashtags = (content: string): ReadonlyArray<string> => {
     if (tag) tags.add(normaliseHashtag(tag))
   }
   return [...tags]
+}
+
+/**
+ * Whether `event` carries `hashtag` — as an explicit `t` tag, or by writing it in the content
+ * without tagging it. A `#t` filter only sees the former, because a relay can match tags and
+ * nothing else; this is the wider local answer, for deciding whether an event already in hand
+ * belongs to a hashtag feed. Casing is irrelevant on both sides.
+ */
+export const eventHasHashtag = (event: NostrEvent, hashtag: string): boolean => {
+  const target = normaliseHashtag(hashtag)
+  if (!target) return false
+  for (const tag of event.tags) {
+    const value = tag[1]
+    if (tag[0] === "t" && value !== undefined && normaliseHashtag(value) === target) return true
+  }
+  // Scanned rather than compared against `extractHashtags`, which would allocate a Set and an array
+  // per call — this runs against every event a hashtag feed sees.
+  for (const match of event.content.matchAll(HASHTAG_PATTERN)) {
+    const found = match[1]
+    if (found !== undefined && normaliseHashtag(found) === target) return true
+  }
+  return false
 }

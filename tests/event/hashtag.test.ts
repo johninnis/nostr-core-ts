@@ -1,5 +1,11 @@
 import { assertEquals } from "@std/assert"
-import { extractHashtags, HASHTAG_PATTERN, normaliseHashtag } from "../../src/domain/service/hashtag.ts"
+import {
+  eventHasHashtag,
+  extractHashtags,
+  HASHTAG_PATTERN,
+  normaliseHashtag,
+} from "../../src/domain/service/hashtag.ts"
+import { buildEventFixture } from "../../testing.ts"
 
 Deno.test("normaliseHashtag - lower-cases the tag", () => {
   assertEquals(normaliseHashtag("Bitcoin"), "bitcoin")
@@ -46,4 +52,34 @@ Deno.test("HASHTAG_PATTERN - is reusable across replace and matchAll without las
   assertEquals(content.replace(HASHTAG_PATTERN, "X"), "X and X")
   assertEquals(extractHashtags(content), ["one", "two"])
   assertEquals(content.replace(HASHTAG_PATTERN, "X"), "X and X")
+})
+
+Deno.test("eventHasHashtag - matches an explicit t tag", () => {
+  const event = buildEventFixture({ content: "no tags in here", tags: [["t", "bitcoin"]] })
+  assertEquals(eventHasHashtag(event, "bitcoin"), true)
+})
+
+Deno.test("eventHasHashtag - matches a t tag regardless of the casing on either side", () => {
+  const event = buildEventFixture({ content: "", tags: [["t", "Bitcoin"]] })
+  assertEquals(eventHasHashtag(event, "#BITCOIN"), true)
+})
+
+Deno.test("eventHasHashtag - matches a hashtag written in content but never tagged", () => {
+  const event = buildEventFixture({ content: "thoughts on #Bitcoin today", tags: [] })
+  assertEquals(eventHasHashtag(event, "bitcoin"), true)
+})
+
+Deno.test("eventHasHashtag - is false when the hashtag appears in neither tags nor content", () => {
+  const event = buildEventFixture({ content: "a note about nostr", tags: [["t", "nostr"]] })
+  assertEquals(eventHasHashtag(event, "bitcoin"), false)
+})
+
+Deno.test("eventHasHashtag - does not match a bare word that is not written as a hashtag", () => {
+  const event = buildEventFixture({ content: "bitcoin without a hash", tags: [] })
+  assertEquals(eventHasHashtag(event, "bitcoin"), false)
+})
+
+Deno.test("eventHasHashtag - is false for an empty hashtag", () => {
+  const event = buildEventFixture({ content: "#bitcoin", tags: [["t", "bitcoin"]] })
+  assertEquals(eventHasHashtag(event, "#"), false)
 })

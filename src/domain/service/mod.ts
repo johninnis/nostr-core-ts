@@ -51,7 +51,7 @@ export type { EventStructureCheck, EventStructureField, ParsedNostrInput } from 
 export { computeSha256, sha256Hex } from "./sha256.ts"
 export { verifyEventSignature } from "./verify.ts"
 
-export { extractHashtags, HASHTAG_PATTERN, normaliseHashtag } from "./hashtag.ts"
+export { eventHasHashtag, extractHashtags, HASHTAG_PATTERN, normaliseHashtag } from "./hashtag.ts"
 export { compileFilter, compileFilters, matchesAnyFilter, matchesFilter } from "./filter.ts"
 export type { CompiledFilter } from "./filter.ts"
 export { hashFilters } from "./filter-hash.ts"
