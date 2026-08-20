@@ -100,6 +100,7 @@ export const createNip05Verifier = (deps: Nip05VerifierDeps): Nip05Verifier => {
     domainQueues.set(domain, [{ pubkey, nip05 }])
     const promise = processQueue(domain)
     inFlight.add(promise)
+    // deno-lint-ignore innis/no-catch-in-layer -- Deliberate: fire-and-forget queue; faults route to the injected onError port
     promise.catch(onError).finally(() => inFlight.delete(promise))
   }
 
