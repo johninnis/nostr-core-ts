@@ -4,6 +4,10 @@
   "publish": {
     "exclude": ["tests/", "deno.lock", ".github/"]
   },
+  "minimumDependencyAge": {
+    "age": "PT24H",
+    "exclude": ["jsr:@innis/*"]
+  },
   "license": "MIT",
   "description": "TypeScript foundation primitives for Nostr: branded types, event helpers, Signer + HttpClient ports, NIP-17 DMs, NIP-98 HTTP auth, and a Result/TaggedError model.",
   "exports": {
