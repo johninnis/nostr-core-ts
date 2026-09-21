@@ -259,9 +259,7 @@ Every error in this package extends `TaggedError<Tag>` — `instanceof TaggedErr
 
 ### Test helpers — `@innis/nostr-core/testing`
 
-A secondary entry point that ships fixture helpers and a configurable mock signer. Import from
-`@innis/nostr-core/testing` (a separate module specifier — keeps test-only symbols out of the
-runtime surface):
+A secondary entry point that ships fixture helpers and a configurable mock signer. Import from `@innis/nostr-core/testing` (a separate module specifier — keeps test-only symbols out of the runtime surface):
 
 ```ts
 import {
@@ -272,16 +270,10 @@ import {
 } from "@innis/nostr-core/testing"
 ```
 
-- `buildEventFixture(overrides?)` — return a `NostrEvent`-shaped value with deterministic placeholder
-  `id` / `pubkey` / `sig`. The defaults are **not cryptographically valid**; use a real signer
-  (e.g. `createLocalSigner`) when you need a signed-and-verifiable event. Uses a module-global
-  counter that increments per call.
+- `buildEventFixture(overrides?)` — return a `NostrEvent`-shaped value with deterministic placeholder `id` / `pubkey` / `sig`. The defaults are **not cryptographically valid**; use a real signer (e.g. `createLocalSigner`) when you need a signed-and-verifiable event. Uses a module-global counter that increments per call.
 - `resetEventFixtureCounter()` — reset that shared counter so the next call produces id `0…01` again.
-- `createEventFactory({ startAt? })` — return an `EventFactory` with its own private counter for
-  parallel-safe suites that need a deterministic, race-free sequence of fixture IDs.
-- `createMockSigner({ pubkey, kind?, signEvent?, nip04Encrypt?, ... })` — build a `Signer` for tests.
-  Unspecified crypto methods resolve to a `failure(SignerError("no-signer", ...))`. Pass `signEvent`
-  to override the default which round-trips through `buildEventFixture`.
+- `createEventFactory({ startAt? })` — return an `EventFactory` with its own private counter for parallel-safe suites that need a deterministic, race-free sequence of fixture IDs.
+- `createMockSigner({ pubkey, kind?, signEvent?, nip04Encrypt?, ... })` — build a `Signer` for tests. Unspecified crypto methods resolve to a `failure(SignerError("no-signer", ...))`. Pass `signEvent` to override the default which round-trips through `buildEventFixture`.
 
 ### Clock — `src/domain/value-object/timestamp.ts`
 
@@ -294,8 +286,7 @@ import {
 
 ## Design conventions (LOCKED)
 
-These decisions are final. Read this section before proposing "consistency" or
-"simplification" sweeps that touch any of them.
+These decisions are final. Read this section before proposing "consistency" or "simplification" sweeps that touch any of them.
 
 ### Scope: protocol primitives only
 
@@ -309,16 +300,11 @@ These decisions are final. Read this section before proposing "consistency" or
 | `HttpClient` port type | Retry policy, backoff, request-batching |
 | `Signer` port type, `createLocalSigner` | Signer-selection UI, login flow, NIP-46 bunker pairing UX |
 
-A generic relay-subscription port (e.g. a `DmQueryService`), DM-cache shape
-(`createDmCache` / `createDmService`), and NIP-05 refresh-staleness policy
-(`createNip05Refresher`) are explicitly out of scope. They are app policy, not protocol
-primitives, and belong in consumer applications. Don't add more in that vein.
+A generic relay-subscription port (e.g. a `DmQueryService`), DM-cache shape (`createDmCache` / `createDmService`), and NIP-05 refresh-staleness policy (`createNip05Refresher`) are explicitly out of scope. They are app policy, not protocol primitives, and belong in consumer applications. Don't add more in that vein.
 
 ### Barrel structure
 
-Every layer has its own `mod.ts` that **explicitly** lists what's public from that layer.
-The root `mod.ts` does `export *` from each layer barrel — zero curation, mechanical
-aggregation. Adding a new export is a **one-line edit** to one layer barrel.
+Every layer has its own `mod.ts` that **explicitly** lists what's public from that layer. The root `mod.ts` does `export *` from each layer barrel — zero curation, mechanical aggregation. Adding a new export is a **one-line edit** to one layer barrel.
 
 ```
 src/domain/value-object/mod.ts    ← explicit re-exports (this layer's surface)
@@ -331,10 +317,7 @@ src/infrastructure/adapter/mod.ts  ← explicit re-exports
 mod.ts (root)                      ← export * from each layer barrel
 ```
 
-The split is deliberate: each layer barrel is the curated source of truth for that layer's
-public surface, while the root barrel is mechanical aggregation. Layer-level curation keeps
-review focused on the layer that owns the symbol; root-level `export *` keeps the package
-entry point a one-line edit per new export.
+The split is deliberate: each layer barrel is the curated source of truth for that layer's public surface, while the root barrel is mechanical aggregation. Layer-level curation keeps review focused on the layer that owns the symbol; root-level `export *` keeps the package entry point a one-line edit per new export.
 
 ### `Signer` interface: throw vs Result
 
@@ -347,16 +330,11 @@ The `Signer` interface uses **two** error conventions, and the split is intentio
 | `nip04Encrypt`/`nip04Decrypt` | `Promise<Result<string, SignerError>>` | Expected-failure-mode (bad payload, locked key, peer rejected) |
 | `nip44Encrypt`/`nip44Decrypt` | `Promise<Result<string, SignerError>>` | Expected-failure-mode |
 
-The two ways map to the two **semantic** categories — rare-exceptional throw, expected-mode
-return. Forcing `Result` on every method would add friction (`if (!r.success)` per call) for
-failures that local signers can't even produce; forcing `throw` on the per-message crypto
-methods would lose the typed `SignerError` discriminator callers rely on. The split is
-locked because each side handles the category it actually fits.
+The two ways map to the two **semantic** categories — rare-exceptional throw, expected-mode return. Forcing `Result` on every method would add friction (`if (!r.success)` per call) for failures that local signers can't even produce; forcing `throw` on the per-message crypto methods would lose the typed `SignerError` discriminator callers rely on. The split is locked because each side handles the category it actually fits.
 
 ### Event-builder shapes
 
-Small builders use **simple positional args** with sensible defaults. Multi-field builders
-use a single input-object parameter.
+Small builders use **simple positional args** with sensible defaults. Multi-field builders use a single input-object parameter.
 
 | Builder | Signature |
 |---|---|
@@ -369,67 +347,37 @@ use a single input-object parameter.
 | `buildLongform(input)` | input-object |
 | `buildZapRequest(input)` | input-object |
 
-The small builders set `created_at` internally via `now()`; callers who need a fixed
-timestamp post-process the returned `UnsignedEvent` (`{ ...event, created_at: 1700... }`)
-before signing. `buildTextNote` and `buildLongform` accept `createdAt` because their
-input surfaces (reply context, longform metadata) justify the extra arg; the small
-builders carry no such surface and stay positional.
+The small builders set `created_at` internally via `now()`; callers who need a fixed timestamp post-process the returned `UnsignedEvent` (`{ ...event, created_at: 1700... }`) before signing. `buildTextNote` and `buildLongform` accept `createdAt` because their input surfaces (reply context, longform metadata) justify the extra arg; the small builders carry no such surface and stay positional.
 
 ### `build*` vs `create*` verb split
 
-`build*` returns inert **data** — one-shot value producers. `create*` returns a **capability
-object** (a closure / function bag) with methods bound inside it. The split is meaningful:
+`build*` returns inert **data** — one-shot value producers. `create*` returns a **capability object** (a closure / function bag) with methods bound inside it. The split is meaningful:
 
 | Verb | Returns | Examples |
 |---|---|---|
 | `build*` | a value (event / filter / fixture) | `buildTextNote`, `buildReaction`, `buildDmGiftWraps`, `buildEventFilter`, `buildNip98AuthEvent`, `buildEventFixture` |
 | `create*` | a capability object with methods | `createBrand`, `createHexBrand`, `createLocalSigner`, `createHttpClient`, `createNip05Verifier`, `createNip98Validator`, `createEventFactory`, `createMockSigner` |
 
-The split is meaningful at the call site: the verb tells a reader whether they're getting
-inert data or a stateful capability.
+The split is meaningful at the call site: the verb tells a reader whether they're getting inert data or a stateful capability.
 
 ### Result type naming
 
-The Result type pair is `Success<T>` / `Failure<E>`; the factories are `ok()` / `failure()`;
-the type guards are `isOk()` / `isFailure()`. Never alias `failure` to anything (the
-collision with `@std/assert.fail()` motivated the original rename from `fail` → `failure`).
+The Result type pair is `Success<T>` / `Failure<E>`; the factories are `ok()` / `failure()`; the type guards are `isOk()` / `isFailure()`. Never alias `failure` to anything (the collision with `@std/assert.fail()` motivated the original rename from `fail` → `failure`).
 
 ### Branded primitives
 
-- **`pubkeyFromNip19`, `formatHex`, `parseHex`, `isRecord`** are intentionally kept even
-  though they look like thin wrappers. Each earns its place by being the *one* sanctioned
-  way to do a thing the rest of the codebase keeps doing — removing any of them just
-  scatters the same code across every consumer.
-  - `pubkeyFromNip19(input)` — the *generic* "give me a `PublicKey` from any NIP-19 entity
-    that carries one" extractor (npub / nprofile / nevent-with-author / naddr). Without it,
-    every paste-handling boundary writes its own `decodeNostrEntity` + per-entity branch
-    + `"pubkey" in decoded` check. Centralised here, it changes once when a new entity
-    type lands.
-  - `formatHex` / `parseHex` — project-verb-consistent re-exports of `@noble/hashes/utils`'
-    `bytesToHex` / `hexToBytes`. Three reasons they exist as wrappers instead of raw imports:
-    (1) every other primitive in the codebase uses the `parseX` / `formatX` verb pair
-    (`parsePublicKey` / `formatAddressableRef` / `parseEventId`), so the hex codec matches
-    the family; (2) the noble import path can change between major versions — wrapping
-    means the upgrade is one file, not a project-wide grep-and-replace; (3) consumers
-    already pulling in `@innis/nostr-core` get hex ↔ bytes for free without having to add
-    `@noble/hashes` to their own dependency list (and risk version skew with ours).
-  - `isRecord(value): value is Record<string, unknown>` — the narrowing form used by
-    every `unknown`-typed JSON sink in the library (`tryParseJson`, NIP-11 schema check,
-    DM crypto rumor parse, zap-receipt parse). Inlined, it's `typeof value === "object"
-    && value !== null && !Array.isArray(value)` — three traps in one line, easy to
-    forget the `!Array.isArray` and silently accept arrays as records.
-- **`parseX(raw)` is the only sanctioned way to brand** a value. Don't `as PublicKey`
-  anywhere.
+- **`pubkeyFromNip19`, `formatHex`, `parseHex`, `isRecord`** are intentionally kept even though they look like thin wrappers. Each earns its place by being the *one* sanctioned way to do a thing the rest of the codebase keeps doing — removing any of them just scatters the same code across every consumer.
+  - `pubkeyFromNip19(input)` — the *generic* "give me a `PublicKey` from any NIP-19 entity that carries one" extractor (npub / nprofile / nevent-with-author / naddr). Without it, every paste-handling boundary writes its own `decodeNostrEntity` + per-entity branch
+    + `"pubkey" in decoded` check. Centralised here, it changes once when a new entity type lands.
+  - `formatHex` / `parseHex` — project-verb-consistent re-exports of `@noble/hashes/utils`' `bytesToHex` / `hexToBytes`. Three reasons they exist as wrappers instead of raw imports: (1) every other primitive in the codebase uses the `parseX` / `formatX` verb pair (`parsePublicKey` / `formatAddressableRef` / `parseEventId`), so the hex codec matches the family; (2) the noble import path can change between major versions — wrapping means the upgrade is one file, not a project-wide grep-and-replace; (3) consumers already pulling in `@innis/nostr-core` get hex ↔ bytes for free without having to add `@noble/hashes` to their own dependency list (and risk version skew with ours).
+  - `isRecord(value): value is Record<string, unknown>` — the narrowing form used by every `unknown`-typed JSON sink in the library (`tryParseJson`, NIP-11 schema check, DM crypto rumor parse, zap-receipt parse). Inlined, it's `typeof value === "object" && value !== null && !Array.isArray(value)` — three traps in one line, easy to forget the `!Array.isArray` and silently accept arrays as records.
+- **`parseX(raw)` is the only sanctioned way to brand** a value. Don't `as PublicKey` anywhere.
 
 ### Clock & RNG: ambient platform capabilities
 
-`now()` and `randomBytes()` / `randomUint32()` live in `domain/service/` and use
-`Date.now()` and `crypto.getRandomValues()` directly. They're treated as **platform
-ambient capabilities**, not "infrastructure" in the clean-architecture sense.
+`now()` and `randomBytes()` / `randomUint32()` live in `domain/service/` and use `Date.now()` and `crypto.getRandomValues()` directly. They're treated as **platform ambient capabilities**, not "infrastructure" in the clean-architecture sense.
 
-For testability, services that derive timestamps or randomness accept optional
-injection (`clock?: Clock`, `randomUint32?: RandomUint32Fn`) defaulting to those primitives.
-There is no "RNG Port" — the architecture-purity gain didn't justify the friction.
+For testability, services that derive timestamps or randomness accept optional injection (`clock?: Clock`, `randomUint32?: RandomUint32Fn`) defaulting to those primitives. There is no "RNG Port" — the architecture-purity gain didn't justify the friction.
 
 ### Existing convention notes (still load-bearing)
 
