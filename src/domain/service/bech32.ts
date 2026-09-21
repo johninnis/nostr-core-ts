@@ -14,9 +14,9 @@ interface Bech32Decoded {
 
 const tryDecodeBech32 = (str: string): Bech32Decoded | null => {
   try {
-    const { prefix, bytes } = bech32.decodeToBytes(str)
-    return { hrp: prefix, bytes }
-  } // deno-lint-ignore innis/no-catch-in-layer -- @scure/base#decodeToBytes throws on malformed input
+    const { prefix, words } = bech32.decode(str, false)
+    return { hrp: prefix, bytes: bech32.fromWords(words) }
+  } // deno-lint-ignore innis/no-catch-in-layer -- @scure/base#decode throws on malformed input
   catch {
     return null
   }
