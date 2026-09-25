@@ -26,6 +26,7 @@ import {
   KIND_ZAP_REQUEST,
 } from "../../src/domain/value-object/kinds.ts"
 import {
+  isAnyReplaceable,
   isParameterisedReplaceable,
   isReplaceable,
   isRepostKind,
@@ -271,4 +272,12 @@ Deno.test("replaceableSupersedes - on a created_at tie the lexicographically low
 
 Deno.test("replaceableSupersedes - an identical event does not supersede itself", () => {
   assertEquals(replaceableSupersedes({ id: LOW_ID, created_at: 1000 }, { id: LOW_ID, created_at: 1000 }), false)
+})
+
+Deno.test("isAnyReplaceable - true for kind 0, a 10000-range kind and a 30000-range kind", () => {
+  assertEquals([0, 10002, 30023].map(isAnyReplaceable), [true, true, true])
+})
+
+Deno.test("isAnyReplaceable - false for a regular kind", () => {
+  assertEquals(isAnyReplaceable(1), false)
 })

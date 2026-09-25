@@ -29,3 +29,8 @@ Deno.test("buildAppSettings - creates kind 30078 event addressed by d-tag", () =
   assertEquals(event.tags, [["d", "hubstr-settings"]])
   assertEquals(event.content, "encrypted-payload")
 })
+
+Deno.test("buildMetadata - keeps non-string fields such as a boolean flag", () => {
+  const event = buildMetadata({ name: "alice", bot: true })
+  assertEquals(JSON.parse(event.content), { name: "alice", bot: true })
+})

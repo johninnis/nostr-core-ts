@@ -1,11 +1,12 @@
 import { EncryptionError } from "../../domain/exception/encryption-error.ts"
 import { GiftWrapUnwrapError } from "../exception/gift-wrap-unwrap-error.ts"
 import type { EventToSign } from "../../domain/service/event-id.ts"
+import { computeEventId } from "../../domain/service/event-id.ts"
 import { decryptJson, encryptJson } from "../../domain/service/json-crypto.ts"
 import type { Signer } from "../../domain/service/signer.ts"
 import { isRecord } from "../../domain/value-object/guards.ts"
 import { KIND_GIFT_WRAP, KIND_PRIVATE_MESSAGE, KIND_REACTION, KIND_SEAL } from "../../domain/value-object/kinds.ts"
-import type { NostrEvent, UnsignedEvent } from "../../domain/value-object/nostr-event.ts"
+import type { NostrEvent, RenderableEvent, UnsignedEvent } from "../../domain/value-object/nostr-event.ts"
 import { isValidTag } from "../../domain/value-object/nostr-event.ts"
 import type { PublicKey } from "../../domain/value-object/public-key.ts"
 import { isValidPublicKey } from "../../domain/value-object/public-key.ts"
@@ -25,8 +26,8 @@ const randomSecondsInWindow = (randomUint32: RandomUint32Fn, windowSeconds: numb
 const jitteredPastTimestamp = (clock: Clock, randomUint32: RandomUint32Fn): number =>
   clock() - randomSecondsInWindow(randomUint32, TWO_DAYS_SECONDS)
 
-/** A NIP-17 rumor — an unsigned event carrying a known author `pubkey`. Structurally identical to `EventToSign`; aliased rather than duplicated. */
-type Rumor = EventToSign
+/** A NIP-59 rumor — an unsigned event that still carries its computed NIP-01 `id` and author `pubkey`. Structurally identical to `RenderableEvent`; aliased rather than duplicated. */
+type Rumor = RenderableEvent
 
 /** Successful output of `unwrapGiftWrap` — the recovered rumor and the seal-signing pubkey (the actual sender, which `giftWrapEvent.pubkey` deliberately hides). */
 interface UnwrapResult {
@@ -48,13 +49,40 @@ const parseSeal = (value: unknown): Seal | null => {
   return { kind: value.kind, pubkey: value.pubkey, content: value.content }
 }
 
-/** Validate `value` as a NIP-17 rumor (an unsigned event with a known author pubkey); returns `null` if any field is invalid. */
-export const parseRumor = (value: unknown): Rumor | null => {
+/** Attach the computed NIP-01 `id` to an unsigned event, producing a NIP-59 rumor ready for `buildDmGiftWraps`. */
+export const buildRumor = async (event: EventToSign): Promise<Rumor> => {
+  const { kind, pubkey, created_at, tags, content } = event
+  const fields: EventToSign = { kind, pubkey, created_at, tags, content }
+  return { ...fields, id: await computeEventId(fields) }
+}
+
+const malformedRumor = (): GiftWrapUnwrapError =>
+  new GiftWrapUnwrapError("rumor-malformed", "Rumor payload is not a valid rumor shape")
+
+const readRumor = async (value: unknown): Promise<Result<Rumor, GiftWrapUnwrapError>> => {
   const seal = parseSeal(value)
-  if (!seal || !isRecord(value)) return null
-  if (typeof value.created_at !== "number" || !Number.isInteger(value.created_at) || value.created_at < 0) return null
-  if (!Array.isArray(value.tags) || !value.tags.every(isValidTag)) return null
-  return { ...seal, created_at: value.created_at, tags: value.tags }
+  if (!seal || !isRecord(value)) return failure(malformedRumor())
+  if (typeof value.created_at !== "number" || !Number.isInteger(value.created_at) || value.created_at < 0) {
+    return failure(malformedRumor())
+  }
+  if (!Array.isArray(value.tags) || !value.tags.every(isValidTag)) return failure(malformedRumor())
+  const rumor = await buildRumor({ ...seal, created_at: value.created_at, tags: value.tags })
+  if (value.id !== undefined && value.id !== rumor.id) {
+    return failure(
+      new GiftWrapUnwrapError("rumor-id-mismatch", "Rumor id does not match the id computed from its fields"),
+    )
+  }
+  return ok(rumor)
+}
+
+/**
+ * Validate `value` as a NIP-59 rumor (an unsigned event with a known author pubkey). A present `id`
+ * must equal the id computed from the other fields; an absent one is derived. Returns `null` if any
+ * field is invalid or the `id` does not match.
+ */
+export const parseRumor = async (value: unknown): Promise<Rumor | null> => {
+  const result = await readRumor(value)
+  return result.success ? result.value : null
 }
 
 /**
@@ -98,10 +126,9 @@ export const unwrapGiftWrap = async (
       ),
     )
   }
-  const rumor = parseRumor(rumorResult.value)
-  if (!rumor) {
-    return failure(new GiftWrapUnwrapError("rumor-malformed", "Rumor payload is not a valid rumor shape"))
-  }
+  const rumorRead = await readRumor(rumorResult.value)
+  if (!rumorRead.success) return rumorRead
+  const rumor = rumorRead.value
   if (rumor.kind !== KIND_PRIVATE_MESSAGE && rumor.kind !== KIND_REACTION) {
     return failure(
       new GiftWrapUnwrapError(
@@ -170,7 +197,7 @@ export interface BuildDmGiftWrapsInput {
   readonly signer: Signer
   readonly ephemeralSignerFactory: (secretKey: Uint8Array) => Signer
   readonly generateSecretKey: () => Uint8Array
-  /** The NIP-17 rumor to wrap — a kind-14 message, a kind-7 reaction, or any other private payload. Its `pubkey` is the sender, who receives the second wrap. */
+  /** The NIP-59 rumor to wrap (build it with `buildRumor`) — a kind-14 message, a kind-7 reaction, or any other private payload. It is encrypted with its `id`. Its `pubkey` is the sender, who receives the second wrap. */
   readonly rumor: Rumor
   readonly recipientPubkey: PublicKey
   /** Clock used for the (jittered) seal/gift-wrap timestamps. Defaults to {@link now}. */

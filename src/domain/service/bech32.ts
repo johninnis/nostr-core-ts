@@ -5,6 +5,8 @@ import { parseEventId } from "../value-object/event-id.ts"
 import { formatHex, parseHex } from "../value-object/hex.ts"
 import type { PublicKey } from "../value-object/public-key.ts"
 import { parsePublicKey } from "../value-object/public-key.ts"
+import type { RelayUrl } from "../value-object/relay-url.ts"
+import { toRelayUrls } from "../value-object/relay-url.ts"
 import { textDecoder, textEncoder } from "../value-object/text-codec.ts"
 
 interface Bech32Decoded {
@@ -61,20 +63,26 @@ const tlvFindEntry = (
   length: number | null = null,
 ): TlvEntry | undefined => entries.find((e) => e.type === type && (length === null || e.value.length === length))
 
-const tlvExtractRelays = (entries: ReadonlyArray<TlvEntry>): ReadonlyArray<string> =>
-  entries.filter((e) => e.type === 1).map((e) => decodeBytes(e.value))
+// Decoded hints are parsed to `RelayUrl` (normalised, deduplicated); a hint that is not a valid
+// relay URL is dropped, so consumers never see a hint they could not connect to.
+const tlvExtractRelays = (entries: ReadonlyArray<TlvEntry>): ReadonlyArray<RelayUrl> =>
+  toRelayUrls(entries.filter((e) => e.type === 1).map((e) => decodeBytes(e.value)))
 
 /** Decoded NIP-19 `npub1…` payload — carries the already-branded `PublicKey`. */
 type DecodedNpub = { readonly type: "npub"; readonly pubkey: PublicKey }
 /** Decoded NIP-19 `note1…` payload — carries the already-branded `EventId`. */
 type DecodedNote = { readonly type: "note"; readonly eventId: EventId }
 /** Decoded NIP-19 `nprofile1…` payload — pubkey plus optional relay hints (TLV type 1). */
-type DecodedNprofile = { readonly type: "nprofile"; readonly pubkey: PublicKey; readonly relays: ReadonlyArray<string> }
+type DecodedNprofile = {
+  readonly type: "nprofile"
+  readonly pubkey: PublicKey
+  readonly relays: ReadonlyArray<RelayUrl>
+}
 /** Decoded NIP-19 `nevent1…` payload — event id plus optional relay hints, author pubkey, and kind. */
 type DecodedNevent = {
   readonly type: "nevent"
   readonly eventId: EventId
-  readonly relays: ReadonlyArray<string>
+  readonly relays: ReadonlyArray<RelayUrl>
   readonly pubkey: PublicKey | null
   readonly kind: number | null
 }
@@ -82,7 +90,7 @@ type DecodedNevent = {
 type DecodedNaddr = {
   readonly type: "naddr"
   readonly dTag: string
-  readonly relays: ReadonlyArray<string>
+  readonly relays: ReadonlyArray<RelayUrl>
   readonly pubkey: PublicKey
   readonly kind: number
 }

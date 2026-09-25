@@ -73,7 +73,7 @@ Deno.test("buildTextNote - deduplicates hashtags", () => {
 
 Deno.test("buildTextNote - creates reply with NIP-10 root e-tag", () => {
   const event = buildTextNote("reply text", {
-    replyToId: eid1,
+    replyToId: { type: "event", id: eid1 },
     replyToAuthorPubkey: pk1,
   }, 1700000000)
   assertEquals(event.kind, KIND_SHORT_NOTE)
@@ -84,7 +84,7 @@ Deno.test("buildTextNote - creates reply with NIP-10 root e-tag", () => {
 
 Deno.test("buildTextNote - includes p-tag for reply author", () => {
   const event = buildTextNote("reply text", {
-    replyToId: eid1,
+    replyToId: { type: "event", id: eid1 },
     replyToAuthorPubkey: pk1,
   }, 1700000000)
   const pTags = event.tags.filter((t) => t[0] === "p")
@@ -93,9 +93,9 @@ Deno.test("buildTextNote - includes p-tag for reply author", () => {
 
 Deno.test("buildTextNote - creates root and reply e-tags for threaded reply", () => {
   const event = buildTextNote("deep reply", {
-    replyToId: eid2,
+    replyToId: { type: "event", id: eid2 },
     replyToAuthorPubkey: pk2,
-    rootEventId: eid1,
+    rootEventId: { type: "event", id: eid1 },
   }, 1700000000)
   const rootTag = event.tags.find((t) => t[0] === "e" && t[3] === "root")
   assertEquals(rootTag?.[1], eid1)
@@ -104,10 +104,10 @@ Deno.test("buildTextNote - creates root and reply e-tags for threaded reply", ()
 })
 
 Deno.test("buildTextNote - reply to an addressable parent uses an a-tag root, not an e-tag", () => {
-  const naddr = encodeNaddr({ kind: KIND_LONGFORM, pubkey: pk1, dTag: "my-article" })
-  const coord = formatAddressableRef({ kind: KIND_LONGFORM, pubkey: pk1, dTag: "my-article" })
+  const address = { kind: KIND_LONGFORM, pubkey: pk1, dTag: "my-article" }
+  const coord = formatAddressableRef(address)
   const event = buildTextNote("Amen", {
-    replyToId: naddr,
+    replyToId: { type: "address", address },
     replyToAuthorPubkey: pk1,
   }, 1700000000)
   const aTag = event.tags.find((t) => t[0] === "a" && t[3] === "root")
@@ -116,12 +116,12 @@ Deno.test("buildTextNote - reply to an addressable parent uses an a-tag root, no
 })
 
 Deno.test("buildTextNote - reply to a note within an addressable thread mixes a-tag root and e-tag reply", () => {
-  const naddr = encodeNaddr({ kind: KIND_LONGFORM, pubkey: pk1, dTag: "my-article" })
-  const coord = formatAddressableRef({ kind: KIND_LONGFORM, pubkey: pk1, dTag: "my-article" })
+  const address = { kind: KIND_LONGFORM, pubkey: pk1, dTag: "my-article" }
+  const coord = formatAddressableRef(address)
   const event = buildTextNote("nested", {
-    replyToId: eid2,
+    replyToId: { type: "event", id: eid2 },
     replyToAuthorPubkey: pk2,
-    rootEventId: naddr,
+    rootEventId: { type: "address", address },
   }, 1700000000)
   const rootTag = event.tags.find((t) => t[3] === "root")
   assertEquals(rootTag?.[0], "a")
@@ -133,7 +133,7 @@ Deno.test("buildTextNote - reply to a note within an addressable thread mixes a-
 
 Deno.test("buildTextNote - includes thread pubkeys without duplicates", () => {
   const event = buildTextNote("reply", {
-    replyToId: eid1,
+    replyToId: { type: "event", id: eid1 },
     replyToAuthorPubkey: pk1,
     threadPubkeys: [pk2, pk2, pk1],
   }, 1700000000)
@@ -145,7 +145,7 @@ Deno.test("buildTextNote - includes thread pubkeys without duplicates", () => {
 
 Deno.test("buildTextNote - reply includes relay hint in root e-tag", () => {
   const event = buildTextNote("reply with relay", {
-    replyToId: eid1,
+    replyToId: { type: "event", id: eid1 },
     replyToAuthorPubkey: pk1,
     rootRelayHint: "wss://relay.example.com",
   }, 1700000000)
@@ -156,9 +156,9 @@ Deno.test("buildTextNote - reply includes relay hint in root e-tag", () => {
 
 Deno.test("buildTextNote - threaded reply includes root and reply e-tags with markers", () => {
   const event = buildTextNote("deep reply", {
-    replyToId: eid2,
+    replyToId: { type: "event", id: eid2 },
     replyToAuthorPubkey: pk2,
-    rootEventId: eid1,
+    rootEventId: { type: "event", id: eid1 },
     rootAuthorPubkey: pk1,
   }, 1700000000)
   const rootTag = event.tags.find((t) => t[0] === "e" && t[3] === "root")
@@ -170,9 +170,9 @@ Deno.test("buildTextNote - threaded reply includes root and reply e-tags with ma
 
 Deno.test("buildTextNote - threaded reply p-tags both reply author and root author", () => {
   const event = buildTextNote("deep reply", {
-    replyToId: eid2,
+    replyToId: { type: "event", id: eid2 },
     replyToAuthorPubkey: pk2,
-    rootEventId: eid1,
+    rootEventId: { type: "event", id: eid1 },
     rootAuthorPubkey: pk1,
   }, 1700000000)
   const pTags = event.tags.filter((t) => t[0] === "p").map((t) => t[1])
@@ -182,9 +182,9 @@ Deno.test("buildTextNote - threaded reply p-tags both reply author and root auth
 
 Deno.test("buildTextNote - threaded reply does not duplicate root author already in threadPubkeys", () => {
   const event = buildTextNote("deep reply", {
-    replyToId: eid2,
+    replyToId: { type: "event", id: eid2 },
     replyToAuthorPubkey: pk2,
-    rootEventId: eid1,
+    rootEventId: { type: "event", id: eid1 },
     rootAuthorPubkey: pk1,
     threadPubkeys: [pk1],
   }, 1700000000)
@@ -194,7 +194,7 @@ Deno.test("buildTextNote - threaded reply does not duplicate root author already
 
 Deno.test("buildTextNote - reply p-tag includes relay hint", () => {
   const event = buildTextNote("reply", {
-    replyToId: eid1,
+    replyToId: { type: "event", id: eid1 },
     replyToAuthorPubkey: pk1,
     rootRelayHint: "wss://write.relay.io",
   }, 1700000000)

@@ -18,5 +18,8 @@ export const isReplaceable = (kind: number): boolean =>
 export const isParameterisedReplaceable = (kind: number): boolean =>
   kind >= PARAM_REPLACEABLE_RANGE_START && kind <= PARAM_REPLACEABLE_RANGE_END
 
+/** `true` for any kind a newer event replaces — NIP-01 replaceable ({@link isReplaceable}) or parameterised-replaceable ({@link isParameterisedReplaceable}). */
+export const isAnyReplaceable = (kind: number): boolean => isReplaceable(kind) || isParameterisedReplaceable(kind)
+
 /** `true` when `kind` is a NIP-18 repost (kind 6 or 16). */
 export const isRepostKind = (kind: number): boolean => REPOST_KINDS.includes(kind)

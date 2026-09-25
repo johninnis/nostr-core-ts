@@ -237,3 +237,10 @@ Deno.test("NOSTR_ENTITY_REGEX - finds multiple distinct entities in one body", (
   const found = [...text.matchAll(NOSTR_ENTITY_REGEX)].map((m) => m[1])
   assertEquals(found, [npub, note])
 })
+
+Deno.test("decodeNostrEntity - normalises relay hints and drops one that is not a relay URL", () => {
+  const pubkey = parsePublicKey("a".repeat(64))
+  assertExists(pubkey)
+  const decoded = decodeNostrEntity(encodeNprofile(pubkey, ["WSS://Relay.Example.COM/", "not a relay"]))
+  assertEquals(decoded?.type === "nprofile" ? decoded.relays.map(String) : null, ["wss://relay.example.com"])
+})

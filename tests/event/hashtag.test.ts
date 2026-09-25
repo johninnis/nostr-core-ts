@@ -83,3 +83,7 @@ Deno.test("eventHasHashtag - is false for an empty hashtag", () => {
   const event = buildEventFixture({ content: "#bitcoin", tags: [["t", "bitcoin"]] })
   assertEquals(eventHasHashtag(event, "#"), false)
 })
+
+Deno.test("normaliseHashtag - trims surrounding whitespace", () => {
+  assertEquals(normaliseHashtag("  #Bitcoin "), "bitcoin")
+})

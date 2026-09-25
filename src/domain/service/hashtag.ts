@@ -13,12 +13,12 @@ import type { NostrEvent } from "../value-object/nostr-event.ts"
 export const HASHTAG_PATTERN: RegExp = /(?<![&\w])#([a-zA-Z0-9_]+)/gu
 
 /**
- * The canonical `t` tag value for a hashtag: no leading `#`, lower-cased. NIP-24 specifies `t` tag
+ * The canonical `t` tag value for a hashtag: trimmed, no leading `#`, lower-cased. NIP-24 specifies `t` tag
  * values as lower-case, and both relay-side `#t` filtering and {@link compileFilter} match tag
  * values exactly — so a hashtag must pass through here on its way into a `t` tag or a `#t` filter,
  * or a `#Bitcoin` written in content will never match the `bitcoin` tag stored alongside it.
  */
-export const normaliseHashtag = (raw: string): string => raw.replace(/^#/, "").toLowerCase()
+export const normaliseHashtag = (raw: string): string => raw.trim().replace(/^#/, "").toLowerCase()
 
 /**
  * Every distinct hashtag in `content`, normalised via {@link normaliseHashtag} and de-duplicated,

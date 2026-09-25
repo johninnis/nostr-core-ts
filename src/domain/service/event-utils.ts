@@ -5,6 +5,7 @@ import type { NostrEvent } from "../value-object/nostr-event.ts"
 import { isValidTagsArray } from "../value-object/nostr-event.ts"
 import type { NostrFilter } from "../value-object/nostr-filter.ts"
 import type { PublicKey } from "../value-object/public-key.ts"
+import type { RelayUrl } from "../value-object/relay-url.ts"
 import { isValidPublicKey } from "../value-object/public-key.ts"
 import { isValidSig } from "../value-object/sig.ts"
 import { decodeNostrEntity, stripNostrUriPrefix } from "./bech32.ts"
@@ -14,7 +15,7 @@ export interface ParsedNostrInput {
   readonly eventId?: EventId
   readonly pubkey?: PublicKey
   readonly naddr?: { readonly kind: number; readonly pubkey: PublicKey; readonly dTag: string }
-  readonly relayHints: ReadonlyArray<string>
+  readonly relayHints: ReadonlyArray<RelayUrl>
 }
 
 /** Parse a hex event ID, npub/nprofile/note/nevent/naddr, or `nostr:` URI into its constituent fields and relay hints. */

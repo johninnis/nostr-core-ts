@@ -9,13 +9,14 @@ export type GiftWrapUnwrapErrorTag =
   | "seal-wrong-kind"
   | "rumor-decrypt-failed"
   | "rumor-malformed"
+  | "rumor-id-mismatch"
   | "rumor-wrong-kind"
   | "rumor-pubkey-mismatch"
 
 /**
  * `unwrapGiftWrap` failure surface. The `*-decrypt-failed` tags carry the underlying
  * `JsonCryptoError` as `cause`; the structural tags (`*-malformed`, `*-wrong-kind`,
- * `*-pubkey-mismatch`, `not-gift-wrap`) carry no cause.
+ * `*-mismatch`, `not-gift-wrap`) carry no cause.
  */
 export class GiftWrapUnwrapError extends TaggedError<GiftWrapUnwrapErrorTag, JsonCryptoError> {
   constructor(tag: GiftWrapUnwrapErrorTag, message: string, cause?: JsonCryptoError) {

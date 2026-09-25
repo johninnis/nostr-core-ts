@@ -66,7 +66,7 @@ export {
 export { parseRelayMessage } from "./relay-message.ts"
 export type { RelayMessage } from "./relay-message.ts"
 
-export { isParameterisedReplaceable, isReplaceable, isRepostKind, REPOST_KINDS } from "./kinds.ts"
+export { isAnyReplaceable, isParameterisedReplaceable, isReplaceable, isRepostKind, REPOST_KINDS } from "./kinds.ts"
 export { replaceableStorageKey, replaceableSupersedes } from "./replaceable.ts"
 
 export {
@@ -95,8 +95,8 @@ export {
 export type { DecryptFn, EventRef, FullList, PrivateEntriesError, RelayEntry, RelayMarker } from "./tags.ts"
 
 export { replyTargetRef, transformEvent } from "./transformer.ts"
+export { eventOrAddressRefFromTag, parseEventOrAddressRef } from "./event-or-address-ref.ts"
 export type {
-  EventOrAddressRef,
   EventRefs,
   HighlightData,
   KindData,

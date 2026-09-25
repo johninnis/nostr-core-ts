@@ -1,7 +1,8 @@
 import { assertEquals, assertExists } from "@std/assert"
 import { replyTargetRef, transformEvent } from "../../src/domain/service/transformer.ts"
 import { formatAddressableRef } from "../../src/domain/value-object/addressable-ref.ts"
-import { encodeNaddr } from "../../src/domain/service/bech32.ts"
+import type { EventOrAddressRef } from "../../src/domain/value-object/event-or-address-ref.ts"
+import type { EventId } from "../../src/domain/value-object/event-id.ts"
 import type { NostrEvent } from "../../src/domain/value-object/nostr-event.ts"
 import { parsePublicKey } from "../../src/domain/value-object/public-key.ts"
 import { parseSig } from "../../src/domain/value-object/sig.ts"
@@ -22,6 +23,12 @@ const eid1 = parseEventId("c".repeat(64))
 const eid2 = parseEventId("d".repeat(64))
 const eid3 = parseEventId("e".repeat(64))
 
+const eventRef = (id: EventId): EventOrAddressRef => ({ type: "event", id })
+const articleRef = (pubkey = pk1): EventOrAddressRef => ({
+  type: "address",
+  address: { kind: KIND_LONGFORM, pubkey, dTag: "my-article" },
+})
+
 const makeEvent = (overrides: Partial<NostrEvent> & { kind: number }): NostrEvent => ({
   id: eid1,
   pubkey: pk1,
@@ -34,17 +41,17 @@ const makeEvent = (overrides: Partial<NostrEvent> & { kind: number }): NostrEven
 
 Deno.test("replyTargetRef - returns the hex id for a non-addressable event", () => {
   const raw = makeEvent({ kind: KIND_SHORT_NOTE })
-  assertEquals(replyTargetRef(raw), raw.id)
+  assertEquals(replyTargetRef(raw), eventRef(raw.id))
 })
 
-Deno.test("replyTargetRef - returns the naddr coordinate for an addressable event", () => {
+Deno.test("replyTargetRef - returns the address ref for an addressable event", () => {
   const raw = makeEvent({ kind: KIND_LONGFORM, tags: [["d", "my-article"]] })
-  assertEquals(replyTargetRef(raw), encodeNaddr({ kind: KIND_LONGFORM, pubkey: pk1, dTag: "my-article" }))
+  assertEquals(replyTargetRef(raw), articleRef())
 })
 
 Deno.test("replyTargetRef - falls back to the hex id for an addressable event with no d tag", () => {
   const raw = makeEvent({ kind: KIND_LONGFORM })
-  assertEquals(replyTargetRef(raw), raw.id)
+  assertEquals(replyTargetRef(raw), eventRef(raw.id))
 })
 
 Deno.test("replyTargetRef - matches the rootEvent a reply derives from an a-tag", () => {
@@ -73,7 +80,7 @@ Deno.test("transformEvent - short note with root e-tag is a reply", () => {
   })
   const result = transformEvent(raw)
   assertEquals(result.refs.isReply, true)
-  assertEquals(result.refs.rootEvent, eid2)
+  assertEquals(result.refs.rootEvent, eventRef(eid2))
 })
 
 Deno.test("transformEvent - short note with root and reply e-tags", () => {
@@ -86,8 +93,8 @@ Deno.test("transformEvent - short note with root and reply e-tags", () => {
     ],
   })
   const result = transformEvent(raw)
-  assertEquals(result.refs.rootEvent, eid2)
-  assertEquals(result.refs.replyToEvent, eid3)
+  assertEquals(result.refs.rootEvent, eventRef(eid2))
+  assertEquals(result.refs.replyToEvent, eventRef(eid3))
   assertEquals(result.refs.isReply, true)
 })
 
@@ -97,8 +104,8 @@ Deno.test("transformEvent - short note with positional e-tags (no markers) uses 
     tags: [["e", eid2], ["e", eid3]],
   })
   const result = transformEvent(raw)
-  assertEquals(result.refs.rootEvent, eid2)
-  assertEquals(result.refs.replyToEvent, eid3)
+  assertEquals(result.refs.rootEvent, eventRef(eid2))
+  assertEquals(result.refs.replyToEvent, eventRef(eid3))
   assertEquals(result.refs.isReply, true)
 })
 
@@ -108,7 +115,7 @@ Deno.test("transformEvent - short note with single positional e-tag uses it as r
     tags: [["e", eid2]],
   })
   const result = transformEvent(raw)
-  assertEquals(result.refs.rootEvent, eid2)
+  assertEquals(result.refs.rootEvent, eventRef(eid2))
   assertEquals(result.refs.replyToEvent, null)
   assertEquals(result.refs.isReply, true)
 })
@@ -119,8 +126,8 @@ Deno.test("transformEvent - short note with only a reply marker (no root) treats
     tags: [["e", eid2, "", "reply"], ["p", pk2]],
   })
   const result = transformEvent(raw)
-  assertEquals(result.refs.replyToEvent, eid2)
-  assertEquals(result.refs.rootEvent, eid2)
+  assertEquals(result.refs.replyToEvent, eventRef(eid2))
+  assertEquals(result.refs.rootEvent, eventRef(eid2))
   assertEquals(result.refs.isReply, true)
 })
 
@@ -150,7 +157,7 @@ Deno.test("transformEvent - repost kind returns repost kindData", () => {
   })
   const result = transformEvent(raw)
   assertExists(result.kindData.repost)
-  assertEquals(result.kindData.repost.originalEventId, eid2)
+  assertEquals(result.kindData.repost.originalEventId, eventRef(eid2))
 })
 
 Deno.test("transformEvent - repost is not flagged as reply", () => {
@@ -169,7 +176,7 @@ Deno.test("transformEvent - generic repost returns repost kindData", () => {
   })
   const result = transformEvent(raw)
   assertExists(result.kindData.repost)
-  assertEquals(result.kindData.repost.originalEventId, eid2)
+  assertEquals(result.kindData.repost.originalEventId, eventRef(eid2))
 })
 
 Deno.test("transformEvent - generic repost falls back to the a-tag coordinate when no e-tag", () => {
@@ -177,10 +184,7 @@ Deno.test("transformEvent - generic repost falls back to the a-tag coordinate wh
   const raw = makeEvent({ kind: KIND_GENERIC_REPOST, tags: [["a", coord], ["k", "30023"]] })
   const result = transformEvent(raw)
   assertExists(result.kindData.repost)
-  assertEquals(
-    result.kindData.repost.originalEventId,
-    encodeNaddr({ kind: KIND_LONGFORM, pubkey: pk1, dTag: "my-article" }),
-  )
+  assertEquals(result.kindData.repost.originalEventId, articleRef())
 })
 
 Deno.test("transformEvent - reaction falls back to the a-tag coordinate when no e-tag", () => {
@@ -188,10 +192,7 @@ Deno.test("transformEvent - reaction falls back to the a-tag coordinate when no 
   const raw = makeEvent({ kind: KIND_REACTION, content: "🔥", tags: [["a", coord], ["k", "30023"]] })
   const result = transformEvent(raw)
   assertExists(result.kindData.reaction)
-  assertEquals(
-    result.kindData.reaction.targetEventId,
-    encodeNaddr({ kind: KIND_LONGFORM, pubkey: pk1, dTag: "my-article" }),
-  )
+  assertEquals(result.kindData.reaction.targetEventId, articleRef())
 })
 
 Deno.test("transformEvent - reaction returns reaction kindData with default +", () => {
@@ -203,7 +204,7 @@ Deno.test("transformEvent - reaction returns reaction kindData with default +", 
   const result = transformEvent(raw)
   assertExists(result.kindData.reaction)
   assertEquals(result.kindData.reaction.content, "+")
-  assertEquals(result.kindData.reaction.targetEventId, eid2)
+  assertEquals(result.kindData.reaction.targetEventId, eventRef(eid2))
 })
 
 Deno.test("transformEvent - reaction.content passes through the raw event content", () => {
@@ -225,7 +226,7 @@ Deno.test("transformEvent - reaction targets last e-tag", () => {
   })
   const result = transformEvent(raw)
   assertExists(result.kindData.reaction)
-  assertEquals(result.kindData.reaction.targetEventId, eid3)
+  assertEquals(result.kindData.reaction.targetEventId, eventRef(eid3))
 })
 
 Deno.test("transformEvent - reaction is not flagged as reply", () => {
@@ -264,11 +265,11 @@ Deno.test("transformEvent - highlight with e-tag source event", () => {
   })
   const result = transformEvent(raw)
   assertExists(result.kindData.highlight)
-  assertEquals(result.kindData.highlight.sourceEventId, eid2)
+  assertEquals(result.kindData.highlight.sourceEventId, eventRef(eid2))
   assertEquals(result.kindData.highlight.sourceUrl, null)
 })
 
-Deno.test("transformEvent - highlight with a-tag source uses naddr encoding", () => {
+Deno.test("transformEvent - highlight with a-tag source is an address ref", () => {
   const raw = makeEvent({
     kind: KIND_HIGHLIGHT,
     content: "text",
@@ -276,10 +277,7 @@ Deno.test("transformEvent - highlight with a-tag source uses naddr encoding", ()
   })
   const result = transformEvent(raw)
   assertExists(result.kindData.highlight)
-  const sourceEventId = result.kindData.highlight.sourceEventId
-  assertExists(sourceEventId)
-  assertEquals(typeof sourceEventId, "string")
-  assertEquals(sourceEventId.startsWith("naddr1"), true)
+  assertEquals(result.kindData.highlight.sourceEventId, articleRef(pk2))
 })
 
 Deno.test("transformEvent - longform returns longform kindData", () => {
@@ -323,7 +321,7 @@ Deno.test("transformEvent - comment kind with e-tag is a reply", () => {
   })
   const result = transformEvent(raw)
   assertEquals(result.refs.isReply, true)
-  assertEquals(result.refs.replyToEvent, eid2)
+  assertEquals(result.refs.replyToEvent, eventRef(eid2))
 })
 
 Deno.test("transformEvent - comment kind uses e-tag as replyToEvent (not positional)", () => {
@@ -332,7 +330,7 @@ Deno.test("transformEvent - comment kind uses e-tag as replyToEvent (not positio
     tags: [["e", eid2], ["e", eid3]],
   })
   const result = transformEvent(raw)
-  assertEquals(result.refs.replyToEvent, eid3)
+  assertEquals(result.refs.replyToEvent, eventRef(eid3))
 })
 
 Deno.test("transformEvent - comment with uppercase E-tag sets rootEvent", () => {
@@ -341,7 +339,7 @@ Deno.test("transformEvent - comment with uppercase E-tag sets rootEvent", () => 
     tags: [["E", eid2], ["e", eid3]],
   })
   const result = transformEvent(raw)
-  assertEquals(result.refs.rootEvent, eid2)
+  assertEquals(result.refs.rootEvent, eventRef(eid2))
 })
 
 Deno.test("transformEvent - short note quoting via q tag with unmarked e tag is not a reply", () => {
@@ -372,7 +370,7 @@ Deno.test("transformEvent - reply that also quotes another note stays a reply wi
   })
   const result = transformEvent(raw)
   assertEquals(result.refs.isReply, true)
-  assertEquals(result.refs.rootEvent, eid2)
+  assertEquals(result.refs.rootEvent, eventRef(eid2))
   assertEquals(result.refs.replyToEvent, null)
 })
 
@@ -383,7 +381,7 @@ Deno.test("transformEvent - reply with explicit markers that also quotes is unaf
   })
   const result = transformEvent(raw)
   assertEquals(result.refs.isReply, true)
-  assertEquals(result.refs.rootEvent, eid2)
+  assertEquals(result.refs.rootEvent, eventRef(eid2))
 })
 
 Deno.test("transformEvent - comment quoting via q tag does not treat the quote as its parent", () => {
@@ -392,7 +390,7 @@ Deno.test("transformEvent - comment quoting via q tag does not treat the quote a
     tags: [["e", eid2], ["q", eid3], ["e", eid3]],
   })
   const result = transformEvent(raw)
-  assertEquals(result.refs.replyToEvent, eid2)
+  assertEquals(result.refs.replyToEvent, eventRef(eid2))
 })
 
 Deno.test("transformEvent - unknown kind returns empty kindData", () => {
@@ -402,4 +400,11 @@ Deno.test("transformEvent - unknown kind returns empty kindData", () => {
   assertEquals(result.kindData.reaction, undefined)
   assertEquals(result.kindData.highlight, undefined)
   assertEquals(result.kindData.longform, undefined)
+})
+
+Deno.test("transformEvent - ignores e-tags whose value is not an event id", () => {
+  const raw = makeEvent({ kind: KIND_SHORT_NOTE, tags: [["e", "not-an-id", "", "root"], ["E", "also-not-an-id"]] })
+  const result = transformEvent(raw)
+  assertEquals(result.refs.rootEvent, null)
+  assertEquals(result.refs.isReply, false)
 })

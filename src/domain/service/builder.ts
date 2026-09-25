@@ -1,8 +1,8 @@
 import type { AddressableEventRef } from "../value-object/addressable-ref.ts"
 import { formatAddressableRef } from "../value-object/addressable-ref.ts"
 import type { EventId } from "../value-object/event-id.ts"
-import { isValidEventId } from "../value-object/event-id.ts"
-import type { EventOrAddressRef } from "./transformer.ts"
+import type { EventOrAddressRef } from "../value-object/event-or-address-ref.ts"
+import { formatEventOrAddressRef } from "../value-object/event-or-address-ref.ts"
 import {
   KIND_APP_SETTINGS,
   KIND_CLIENT_AUTH,
@@ -68,7 +68,7 @@ const extractReferenceTags = (content: string): ReadonlyArray<Tag> => {
   return tags
 }
 
-/** Threading context for `buildTextNote` — the parent event and (optionally) the thread root plus any pubkeys to keep in the conversation. A ref may be a hex event id (`e` tag) or an `naddr1...` coordinate for an addressable parent (`a` tag). */
+/** Threading context for `buildTextNote` — the parent event and (optionally) the thread root plus any pubkeys to keep in the conversation. An event ref becomes an `e` tag, an address ref (addressable parent) an `a` tag. */
 interface ReplyContext {
   readonly replyToId: EventOrAddressRef
   readonly replyToAuthorPubkey: PublicKey
@@ -78,12 +78,11 @@ interface ReplyContext {
   readonly threadPubkeys?: ReadonlyArray<PublicKey>
 }
 
-const threadTag = (ref: EventOrAddressRef, relay: string, marker: string): Tag => {
-  if (isValidEventId(ref)) return ["e", ref, relay, marker]
-  const decoded = decodeNostrEntity(ref)
-  if (decoded && decoded.type === "naddr") return ["a", formatAddressableRef(decoded), relay, marker]
-  return ["e", ref, relay, marker]
-}
+const threadTag = (
+  ref: EventOrAddressRef,
+  relay: string,
+  marker: string,
+): Tag => [ref.type === "event" ? "e" : "a", formatEventOrAddressRef(ref), relay, marker]
 
 const buildReplyTags = ({
   replyToId,
@@ -94,7 +93,7 @@ const buildReplyTags = ({
   threadPubkeys = [],
 }: ReplyContext): ReadonlyArray<Tag> => {
   const effectiveRootId = rootEventId ?? replyToId
-  const isSameAsRoot = !rootEventId || rootEventId === replyToId
+  const isSameAsRoot = !rootEventId || formatEventOrAddressRef(rootEventId) === formatEventOrAddressRef(replyToId)
   const relay = rootRelayHint ?? ""
 
   const tags: Array<Tag> = [threadTag(effectiveRootId, relay, "root")]
@@ -269,7 +268,7 @@ export const buildLongform = (
 }
 
 /** Build a kind-0 profile metadata event (NIP-01); `metadata` is serialised as the JSON content (e.g. `name`, `about`, `picture`). */
-export const buildMetadata = (metadata: Record<string, string>): UnsignedEvent => ({
+export const buildMetadata = (metadata: Readonly<Record<string, unknown>>): UnsignedEvent => ({
   kind: KIND_METADATA,
   created_at: now(),
   tags: [],

@@ -11,6 +11,7 @@
 import {
   buildDmGiftWraps,
   buildReaction,
+  buildRumor,
   buildTextNote,
   computeEventId,
   createLocalSigner,
@@ -102,13 +103,13 @@ const wrapsResult = await buildDmGiftWraps({
   signer: alice.signer,
   ephemeralSignerFactory: (sk) => createLocalSigner(sk),
   generateSecretKey,
-  rumor: {
+  rumor: await buildRumor({
     kind: 14,
     pubkey: alice.pubkey,
     created_at: now(),
     tags: [["p", bob.pubkey]],
     content: "psst — this is a kind-14 rumor inside a kind-1059 wrap",
-  },
+  }),
   recipientPubkey: bob.pubkey,
 })
 if (!wrapsResult.success) throw wrapsResult.error

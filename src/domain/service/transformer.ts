@@ -1,5 +1,6 @@
 import type { EventId } from "../value-object/event-id.ts"
 import { isValidEventId } from "../value-object/event-id.ts"
+import type { EventOrAddressRef } from "../value-object/event-or-address-ref.ts"
 import type { RenderableEvent, Tag } from "../value-object/nostr-event.ts"
 import {
   KIND_COMMENT,
@@ -12,21 +13,10 @@ import {
 } from "../value-object/kinds.ts"
 import type { PublicKey } from "../value-object/public-key.ts"
 import { isValidPublicKey } from "../value-object/public-key.ts"
-import { parseAddressableRef } from "../value-object/addressable-ref.ts"
-import { encodeNaddr } from "./bech32.ts"
+import { eventOrAddressRefFromTag } from "./event-or-address-ref.ts"
 import { isParameterisedReplaceable } from "./kinds.ts"
 import { getTagValue } from "./tags.ts"
 import { DEFAULT_REACTION } from "./reaction.ts"
-
-/**
- * Opaque pointer to a parent event in NIP-10 reply graphs. Two shapes coexist:
- *
- * - a hex `EventId` (from an `e` / `E` tag), or
- * - a NIP-19 `naddr1...` bech32 string (from an `a` / `A` tag for parameterised-replaceable parents).
- *
- * Consumers that need to branch should use `isValidEventId(value)` — true ⇒ event-id, false ⇒ naddr.
- */
-export type EventOrAddressRef = string
 
 /** Reply-graph view derived from an event's tags — root/reply pointers, mentioned ids/pubkeys, and a `kind`-aware reply flag. */
 interface EventRefs {
@@ -37,7 +27,7 @@ interface EventRefs {
   readonly isReply: boolean
 }
 
-/** Per-kind projection for NIP-18 reposts — the original event being reposted as a hex id (`e` tag) or `naddr1...` coordinate (`a` tag), or `null` if neither was present. */
+/** Per-kind projection for NIP-18 reposts — the original event being reposted (`e` tag, else `a` tag), or `null` if neither was present. */
 interface RepostData {
   readonly originalEventId: EventOrAddressRef | null
 }
@@ -82,23 +72,17 @@ interface TransformedEvent {
   readonly kindData: KindData
 }
 
-const encodeAddressTag = (value: string): string | null => {
-  const parsed = parseAddressableRef(value)
-  if (!parsed || !parsed.dTag) return null
-  return encodeNaddr(parsed)
-}
-
 /**
- * The {@link EventOrAddressRef} a reply uses to point at `event`: an `naddr1...` coordinate for an
- * addressable (parameterised-replaceable) event with a `d` tag, otherwise the hex event id. This is
- * the inverse of {@link encodeAddressTag} and the value `buildRefs` produces for a reply's parent.
+ * The {@link EventOrAddressRef} a reply uses to point at `event`: its coordinate for an addressable
+ * (parameterised-replaceable) event with a `d` tag, otherwise its event id. This is the value `transformEvent`
+ * derives as a reply's `rootEvent` / `replyToEvent` when the reply tags `event`.
  */
 export const replyTargetRef = (event: RenderableEvent): EventOrAddressRef => {
   if (isParameterisedReplaceable(event.kind)) {
     const dTag = getTagValue(event.tags, "d") ?? ""
-    if (dTag) return encodeNaddr({ kind: event.kind, pubkey: event.pubkey, dTag })
+    if (dTag) return { type: "address", address: { kind: event.kind, pubkey: event.pubkey, dTag } }
   }
-  return event.id
+  return { type: "event", id: event.id }
 }
 
 const buildRefs = (raw: RenderableEvent): EventRefs => {
@@ -107,7 +91,8 @@ const buildRefs = (raw: RenderableEvent): EventRefs => {
   let rootEvent: EventOrAddressRef | null = null
   let replyToEvent: EventOrAddressRef | null = null
   const eTags: Array<string> = []
-  const aTagsPositional: Array<string> = []
+  const eRefsPositional: Array<EventOrAddressRef> = []
+  const aRefsPositional: Array<EventOrAddressRef> = []
   const mentionedPubkeys: Array<string> = []
   let hasExplicitMarkers = false
 
@@ -118,33 +103,34 @@ const buildRefs = (raw: RenderableEvent): EventRefs => {
 
   for (const tag of tags) {
     if (!tag[0] || !tag[1]) continue
+    const ref = eventOrAddressRefFromTag(tag)
 
     if (tag[0] === "E") {
-      rootEvent = tag[1]
+      if (ref) rootEvent = ref
     } else if (tag[0] === "e") {
+      const isQuoted = quotedEventIds.has(tag[1])
       if (isComment) {
-        if (!quotedEventIds.has(tag[1])) replyToEvent = tag[1]
+        if (ref && !isQuoted) replyToEvent = ref
       } else {
         const marker = tag[3] ?? null
         if (marker) hasExplicitMarkers = true
-        if (marker === "root") rootEvent = tag[1]
-        else if (marker === "reply") replyToEvent = tag[1]
+        if (ref && marker === "root") rootEvent = ref
+        else if (ref && marker === "reply") replyToEvent = ref
+        else if (ref && !isQuoted) eRefsPositional.push(ref)
       }
       eTags.push(tag[1])
     } else if (tag[0] === "A") {
-      const naddr = encodeAddressTag(tag[1])
-      if (naddr && !rootEvent) rootEvent = naddr
+      if (ref && !rootEvent) rootEvent = ref
     } else if (tag[0] === "a") {
-      const naddr = encodeAddressTag(tag[1])
-      if (!naddr) continue
+      if (!ref) continue
       if (isComment) {
-        if (!replyToEvent) replyToEvent = naddr
+        if (!replyToEvent) replyToEvent = ref
       } else {
         const marker = tag[3] ?? null
         if (marker) hasExplicitMarkers = true
-        if (marker === "root" && !rootEvent) rootEvent = naddr
-        else if (marker === "reply" && !replyToEvent) replyToEvent = naddr
-        else if (!marker) aTagsPositional.push(naddr)
+        if (marker === "root" && !rootEvent) rootEvent = ref
+        else if (marker === "reply" && !replyToEvent) replyToEvent = ref
+        else if (!marker) aRefsPositional.push(ref)
       }
     }
 
@@ -154,11 +140,10 @@ const buildRefs = (raw: RenderableEvent): EventRefs => {
   }
 
   if (!isComment && !hasExplicitMarkers) {
-    const threadETags = eTags.filter((id) => !quotedEventIds.has(id))
-    if (!rootEvent && threadETags.length > 0) rootEvent = threadETags[0] ?? null
-    if (!replyToEvent && threadETags.length > 1) replyToEvent = threadETags[threadETags.length - 1] ?? null
-    if (!rootEvent && aTagsPositional.length > 0) rootEvent = aTagsPositional[0] ?? null
-    if (!replyToEvent && aTagsPositional.length > 1) replyToEvent = aTagsPositional[aTagsPositional.length - 1] ?? null
+    if (!rootEvent) rootEvent = eRefsPositional[0] ?? null
+    if (!replyToEvent && eRefsPositional.length > 1) replyToEvent = eRefsPositional.at(-1) ?? null
+    if (!rootEvent) rootEvent = aRefsPositional[0] ?? null
+    if (!replyToEvent && aRefsPositional.length > 1) replyToEvent = aRefsPositional.at(-1) ?? null
   }
 
   if (!rootEvent && replyToEvent) rootEvent = replyToEvent
@@ -175,6 +160,15 @@ const buildRefs = (raw: RenderableEvent): EventRefs => {
   }
 }
 
+const firstRefTagged = (tags: ReadonlyArray<Tag>, name: "e" | "a"): EventOrAddressRef | null => {
+  for (const tag of tags) {
+    if (tag[0] !== name) continue
+    const ref = eventOrAddressRefFromTag(tag)
+    if (ref) return ref
+  }
+  return null
+}
+
 const buildKindData = (kind: number, raw: RenderableEvent): KindData => {
   if (kind === KIND_REPOST || kind === KIND_GENERIC_REPOST) return buildRepostKindData(raw)
   if (kind === KIND_REACTION) return buildReactionKindData(raw)
@@ -183,58 +177,16 @@ const buildKindData = (kind: number, raw: RenderableEvent): KindData => {
   return {}
 }
 
-const buildRepostKindData = (raw: RenderableEvent): KindData => {
-  let originalEventId: EventOrAddressRef | null = null
-
-  for (const tag of raw.tags) {
-    if (tag[0] === "e" && tag[1] && isValidEventId(tag[1])) {
-      originalEventId = tag[1]
-      break
-    }
-  }
-  if (!originalEventId) {
-    for (const tag of raw.tags) {
-      if (tag[0] === "a" && tag[1]) {
-        const naddr = encodeAddressTag(tag[1])
-        if (naddr) {
-          originalEventId = naddr
-          break
-        }
-      }
-    }
-  }
-
-  return { repost: { originalEventId } }
-}
+const buildRepostKindData = (raw: RenderableEvent): KindData => ({
+  repost: { originalEventId: firstRefTagged(raw.tags, "e") ?? firstRefTagged(raw.tags, "a") },
+})
 
 const buildReactionKindData = (raw: RenderableEvent): KindData => {
-  const tags = raw.tags
-  let targetEventId: EventOrAddressRef | null = null
-
-  for (let i = tags.length - 1; i >= 0; i--) {
-    const tag = tags[i]
-    if (tag && tag[0] === "e" && tag[1] && isValidEventId(tag[1])) {
-      targetEventId = tag[1]
-      break
-    }
-  }
-  if (!targetEventId) {
-    for (let i = tags.length - 1; i >= 0; i--) {
-      const tag = tags[i]
-      if (tag && tag[0] === "a" && tag[1]) {
-        const naddr = encodeAddressTag(tag[1])
-        if (naddr) {
-          targetEventId = naddr
-          break
-        }
-      }
-    }
-  }
-
+  const newestFirst = raw.tags.toReversed()
   return {
     reaction: {
       content: raw.content || DEFAULT_REACTION,
-      targetEventId,
+      targetEventId: firstRefTagged(newestFirst, "e") ?? firstRefTagged(newestFirst, "a"),
     },
   }
 }
@@ -250,10 +202,7 @@ const buildHighlightKindData = (raw: RenderableEvent): KindData => {
     if (tag[0] === "context") context = tag[1]
     else if (tag[0] === "comment") comment = tag[1]
     else if (tag[0] === "r") sourceUrl = tag[1]
-    else if (sourceEventId === null) {
-      if (tag[0] === "e" && isValidEventId(tag[1])) sourceEventId = tag[1]
-      else if (tag[0] === "a") sourceEventId = encodeAddressTag(tag[1])
-    }
+    else if (sourceEventId === null && (tag[0] === "e" || tag[0] === "a")) sourceEventId = eventOrAddressRefFromTag(tag)
   }
 
   // r-tag wins over any e/a candidate captured during the same pass.
