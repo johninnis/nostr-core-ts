@@ -1,36 +1,23 @@
 import type { EventId } from "../value-object/event-id.ts"
 import { isValidEventId } from "../value-object/event-id.ts"
-import { tryParseJson } from "../value-object/json.ts"
 import type { Tag } from "../value-object/nostr-event.ts"
-import { isValidTag } from "../value-object/nostr-event.ts"
 import type { PublicKey } from "../value-object/public-key.ts"
 import { isValidPublicKey } from "../value-object/public-key.ts"
 import type { RelayUrl } from "../value-object/relay-url.ts"
-import { normaliseRelayUrl } from "../value-object/relay-url.ts"
-import type { Result } from "../value-object/result.ts"
-import { failure, ok } from "../value-object/result.ts"
-import { PrivateEntriesParseError } from "../exception/private-entries-parse-error.ts"
-import type { SignerError } from "../exception/signer-error.ts"
+import { parseRelayUrl } from "../value-object/relay-url.ts"
+import type { SoleTagValue } from "../value-object/sole-tag-value.ts"
+import { soleValue } from "../value-object/sole-tag-value.ts"
 
-/** Callback shape `decryptPrivateEntries` / `extractFullList` take for NIP-04 / NIP-44 decryption — typically `signer.nip44Decrypt`. */
-type DecryptFn = (pubkey: PublicKey, ciphertext: string) => Promise<Result<string, SignerError>>
-
-/** Failure surface of `decryptPrivateEntries` and `extractFullList` — the signer call failed (`SignerError`) or the decrypted plaintext wasn't a valid JSON array of tags (`PrivateEntriesParseError`). */
-export type PrivateEntriesError = SignerError | PrivateEntriesParseError
-
-/** NIP-65 relay-marker value — `"read"`, `"write"`, or `"both"` (the inferred default when no marker is on the `r` tag). */
+/**
+ * NIP-65 relay-marker value — `"read"`, `"write"`, or `"both"`, which an `r` tag with no marker, or with a marker
+ * NIP-65 does not define, states (shared ADR-0108).
+ */
 type RelayMarker = "read" | "write" | "both"
 
 /** Normalised entry returned by `extractRelayEntries` — a branded `RelayUrl` and its declared marker. */
 interface RelayEntry {
   readonly url: RelayUrl
   readonly marker: RelayMarker
-}
-
-/** Return shape of `extractFullList` — a NIP-51 list's public tags (from `event.tags`) and decrypted private tags (from `event.content`). */
-interface FullList {
-  readonly publicTags: ReadonlyArray<Tag>
-  readonly privateTags: ReadonlyArray<Tag>
 }
 
 const toRelayMarker = (value: string | undefined): RelayMarker => value === "read" || value === "write" ? value : "both"
@@ -44,148 +31,159 @@ export const addTag = (tags: ReadonlyArray<Tag>, name: string, value: string): R
   hasTag(tags, name, value) ? tags : [...tags, [name, value]]
 
 /** Drop every tag whose first element is `name` and second element is `value`. */
-export const removeTag = (tags: ReadonlyArray<Tag>, name: string, value: string): ReadonlyArray<Tag> =>
+export const removeTag = <T extends Tag>(tags: ReadonlyArray<T>, name: string, value: string): ReadonlyArray<T> =>
   tags.filter((t) => !(t[0] === name && t[1] === value))
 
-/** Collect every non-empty second element of tags whose first element matches `tagName`. */
-export const extractTagValues = (tags: ReadonlyArray<Tag>, tagName: string): ReadonlyArray<string> =>
-  tags.flatMap((t) => t[0] === tagName && t[1] ? [t[1]] : [])
+/**
+ * The distinct second elements of tags whose first element matches `tagName`, in the order first tagged. A tag repeated
+ * with the same value is one claim (shared ADR-0014), and an empty value is the empty string, not absence (shared
+ * ADR-0079): a reader that wants only non-empty values, or values of some form, filters for them itself.
+ */
+export const extractTagValues = (tags: ReadonlyArray<Tag>, tagName: string): ReadonlyArray<string> => [
+  ...new Set(tags.flatMap((t) => t[0] === tagName && t[1] !== undefined ? [t[1]] : [])),
+]
 
-/** Return the second element of the first tag matching `tagName`, or `null` if absent / the tag carries no value. */
-export const getTagValue = (tags: ReadonlyArray<Tag>, tagName: string): string | null => {
-  const tag = tags.find((t) => t[0] === tagName)
-  return tag?.[1] ?? null
-}
+/**
+ * What the `tagName` tags state as their one value: `one` with the value, the empty string included; `absent` when no
+ * tag carries one; `disagreeing` when they carry different values, `value` being `null` for both. A value repeated
+ * across tags is one claim and tags that disagree state no value, so tag order never decides the answer (shared
+ * ADR-0014).
+ */
+export const soleTagValue = (tags: ReadonlyArray<Tag>, tagName: string): SoleTagValue =>
+  soleValue(tags.flatMap((t) => t[0] === tagName && t[1] !== undefined ? [t[1]] : []))
 
-/** Extract every valid `PublicKey` from the `p` tags of `tags`. */
+/** Every valid `PublicKey` the `p` tags of `tags` name, once each, in the order first tagged. */
 export const extractPubkeys = (tags: ReadonlyArray<Tag>): ReadonlyArray<PublicKey> =>
   extractTagValues(tags, "p").filter(isValidPublicKey)
 
 /** Extract `(url, marker)` entries from `r` tags, normalising URLs and defaulting unknown markers to `"both"`. */
-export const extractRelayEntries = (tags: ReadonlyArray<Tag>): ReadonlyArray<RelayEntry> => {
-  const entries: Array<RelayEntry> = []
-  for (const t of tags) {
-    if (t[0] !== "r" || !t[1]) continue
-    const url = normaliseRelayUrl(t[1])
-    if (!url) continue
-    entries.push({ url, marker: toRelayMarker(t[2]) })
-  }
-  return entries
-}
+export const extractRelayEntries = (tags: ReadonlyArray<Tag>): ReadonlyArray<RelayEntry> =>
+  tags.flatMap((t) => {
+    const url = t[0] === "r" ? parseRelayUrl(t[1]) : null
+    return url === null ? [] : [{ url, marker: toRelayMarker(t[2]) }]
+  })
 
-/** `true` when `tags` contains a `p` tag referencing `pubkey`. */
-export const hasPubkey = (tags: ReadonlyArray<Tag>, pubkey: PublicKey): boolean => hasTag(tags, "p", pubkey)
-
-/** Append a `p` tag for `pubkey` if not already present; returns the original array otherwise. */
-export const addPubkeyTag = (tags: ReadonlyArray<Tag>, pubkey: PublicKey): ReadonlyArray<Tag> =>
-  addTag(tags, "p", pubkey)
-
-/** Remove any `p` tag referencing `pubkey`. */
-export const removePubkeyTag = (tags: ReadonlyArray<Tag>, pubkey: PublicKey): ReadonlyArray<Tag> =>
-  removeTag(tags, "p", pubkey)
-
-/** Extract every valid `EventId` from the `e` tags of `tags`. */
+/** Every valid `EventId` the `e` tags of `tags` name, once each, in the order first tagged. */
 export const extractEventIds = (tags: ReadonlyArray<Tag>): ReadonlyArray<EventId> =>
   extractTagValues(tags, "e").filter(isValidEventId)
 
-/** Entry returned by `extractEventRefs` — a branded `EventId` and the optional relay hint from the third tag column (omitted if empty). */
-interface EventRef {
-  readonly id: EventId
-  readonly relayHint?: string
-}
+const NIP10_MARKERS: ReadonlySet<string> = new Set(["root", "reply", "mention"])
 
-/** Extract `(id, relayHint?)` entries from `e` tags whose first value parses as a valid event ID. */
-export const extractEventRefs = (tags: ReadonlyArray<Tag>): ReadonlyArray<EventRef> => {
-  const refs: Array<EventRef> = []
-  for (const t of tags) {
-    if (t[0] !== "e" || typeof t[1] !== "string") continue
-    if (!isValidEventId(t[1])) continue
-    const relayHint = t[2]
-    refs.push(relayHint !== undefined && relayHint !== "" ? { id: t[1], relayHint } : { id: t[1] })
-  }
-  return refs
-}
-
-/** `true` when `tags` contains an `e` tag referencing `eventId`. */
-export const hasEventId = (tags: ReadonlyArray<Tag>, eventId: EventId): boolean => hasTag(tags, "e", eventId)
-
-/** Append an `e` tag for `eventId` if not already present. */
-export const addEventTag = (tags: ReadonlyArray<Tag>, eventId: EventId): ReadonlyArray<Tag> =>
-  addTag(tags, "e", eventId)
-
-/** Remove any `e` tag referencing `eventId`. */
-export const removeEventTag = (tags: ReadonlyArray<Tag>, eventId: EventId): ReadonlyArray<Tag> =>
-  removeTag(tags, "e", eventId)
-
-/** `true` when `tags` contains an `r` tag for `url` (regardless of marker). */
-export const hasRelayEntry = (tags: ReadonlyArray<Tag>, url: string): boolean => hasTag(tags, "r", url)
-
-/** Return the relay marker on the first `r` tag for `url`, or `null` if no such tag exists. */
-export const getRelayEntryMarker = (tags: ReadonlyArray<Tag>, url: string): RelayMarker | null => {
-  const tag = tags.find((t) => t[0] === "r" && t[1] === url)
-  return tag ? toRelayMarker(tag[2]) : null
+/**
+ * The marker of a kind 1 `e` tag: NIP-10's `root` or `reply`, or the `mention` marker earlier versions of NIP-10
+ * defined, which marks the tag without naming a root or a parent (shared ADR-0012); `null` when it carries none of
+ * them.
+ */
+export const nip10Marker = (tag: Tag): string | null => {
+  const marker = tag[3]
+  return marker !== undefined && NIP10_MARKERS.has(marker) ? marker : null
 }
 
 /**
- * Add an `r` tag for `url` with the given `marker`. **Intentionally an upsert** — kept under the
- * `add*` verb on purpose, for two reasons:
- *
- *   1. **Consistency with the rest of the `add*Tag` family.** Callers reach for the same verb
- *      regardless of which tag type they're touching; the API surface stays one shape.
- *   2. **It does what its name says — add this tag.** When there's no existing `r` tag for `url`,
- *      it appends, exactly like `addTag` / `addEventTag` / `addPubkeyTag`. When there *is* one
- *      already, we treat the new call as the latest expression of caller intent and overwrite
- *      the marker (most-recent-wins). Relay tags are unique by URL — there is no sensible state
- *      where two `r` tags for the same URL coexist with different markers; the caller asking
- *      for `addRelayTag(tags, url, "read")` after a prior `addRelayTag(tags, url, "write")` is
- *      stating their current preference, not their original one.
- *
- * If you need to distinguish "did I just insert?" from "did I just overwrite?", call
- * `hasRelayEntry` first. The other `add*Tag` helpers in this module are no-op-on-duplicate
- * because their tags carry no extra state — `[name, value]` equality is total — so there is
- * nothing for a second call to "update". Relay tags carry a marker; this one isn't.
+ * The author an `e` tag names: its fifth element when it has one, the NIP-10 slot after the marker (`["e", id, relay,
+ * marker, pubkey]`, the marker possibly empty), its fourth never then read as an author; otherwise its fourth, where
+ * NIP-22 and NIP-25 write it (`["e", id, relay, pubkey]`); `null` when that element is not a public key (shared
+ * ADR-0012).
+ */
+export const eventTagAuthor = (tag: Tag): PublicKey | null => {
+  const author = tag.length > 4 ? tag[4] : tag[3]
+  return author !== undefined && isValidPublicKey(author) ? author : null
+}
+
+/**
+ * Entry returned by `extractEventRefs` — a branded `EventId`, the relay hint from the third tag column, parsed as a
+ * canonical `RelayUrl`, or `null` when the column is absent, empty, or not a relay URL, and the author the tag names
+ * (see {@link eventTagAuthor}).
+ */
+interface EventRef {
+  readonly id: EventId
+  readonly relayHint: RelayUrl | null
+  readonly author: PublicKey | null
+}
+
+/**
+ * Extract `(id, relayHint, author)` entries from `e` tags whose first value parses as a valid event ID; an invalid hint
+ * is no hint, and an invalid author no author.
+ */
+export const extractEventRefs = (tags: ReadonlyArray<Tag>): ReadonlyArray<EventRef> =>
+  tags.flatMap((t) =>
+    t[0] === "e" && t[1] !== undefined && isValidEventId(t[1])
+      ? [{ id: t[1], relayHint: parseRelayUrl(t[2]), author: eventTagAuthor(t) }]
+      : []
+  )
+
+const isRelayTagFor = (tag: Tag, url: RelayUrl): boolean =>
+  tag[0] === "r" && tag[1] !== undefined && parseRelayUrl(tag[1]) === url
+
+/** `true` when `tags` contains an `r` tag for `url` in any form that canonicalises to it (regardless of marker). */
+export const hasRelayEntry = (tags: ReadonlyArray<Tag>, url: RelayUrl): boolean =>
+  tags.some((t) => isRelayTagFor(t, url))
+
+const relayMarkerFor = (read: boolean, write: boolean): RelayMarker | null =>
+  read && write ? "both" : read ? "read" : write ? "write" : null
+
+/**
+ * The relay marker `tags` state for `url` (compared by canonical form) across every `r` tag for it, so tag order never
+ * decides it: a relay one tag marks `read` and another `write` is used both ways (shared ADR-0108). `null` when no tag
+ * names the relay.
+ */
+export const getRelayEntryMarker = (tags: ReadonlyArray<Tag>, url: RelayUrl): RelayMarker | null => {
+  const markers = tags.flatMap((t) => isRelayTagFor(t, url) ? [toRelayMarker(t[2])] : [])
+  return relayMarkerFor(markers.some((m) => m !== "write"), markers.some((m) => m !== "read"))
+}
+
+const relayTag = (url: RelayUrl, marker: RelayMarker): Tag => marker === "both" ? ["r", url] : ["r", url, marker]
+
+const isSameTag = (a: Tag, b: Tag): boolean => a.length === b.length && a.every((value, index) => value === b[index])
+
+// Deliberate: an add* verb that upserts, because relay tags are unique by URL — see ADR-0009
+/**
+ * Upsert the `r` tag for `url` with `marker`: appended when absent, otherwise written in canonical form at the first
+ * equivalent tag's position with every other equivalent dropped, so the result holds exactly one `r` tag for `url`.
  */
 export const addRelayTag = (
   tags: ReadonlyArray<Tag>,
-  url: string,
+  url: RelayUrl,
   marker: RelayMarker = "both",
 ): ReadonlyArray<Tag> => {
-  const tag: Tag = marker === "both" ? ["r", url] : ["r", url, marker]
-  return hasRelayEntry(tags, url) ? tags.map((t) => t[0] === "r" && t[1] === url ? tag : t) : [...tags, tag]
+  const tag = relayTag(url, marker)
+  const first = tags.findIndex((t) => isRelayTagFor(t, url))
+  if (first === -1) return [...tags, tag]
+  return tags.flatMap((t, index) => index === first ? [tag] : isRelayTagFor(t, url) ? [] : [t])
 }
 
-/** Remove any `r` tag for `url`. */
-export const removeRelayTag = (tags: ReadonlyArray<Tag>, url: string): ReadonlyArray<Tag> => removeTag(tags, "r", url)
+/** Remove every `r` tag for `url`, compared by canonical form. */
+export const removeRelayTag = (tags: ReadonlyArray<Tag>, url: RelayUrl): ReadonlyArray<Tag> =>
+  tags.filter((t) => !isRelayTagFor(t, url))
 
-/** Decrypt an event's `content` and parse it as a JSON array of private tags (NIP-51 encrypted lists). */
-export const decryptPrivateEntries = async (
-  encryptedContent: string,
-  pubkey: PublicKey,
-  decryptFn: DecryptFn,
-): Promise<Result<ReadonlyArray<Tag>, PrivateEntriesError>> => {
-  if (!encryptedContent) return ok([])
-  const result = await decryptFn(pubkey, encryptedContent)
-  if (!result.success) return result
-  const parsed = tryParseJson(result.value)
-  if (parsed === null) {
-    return failure(new PrivateEntriesParseError("private entries could not be parsed as JSON"))
-  }
-  if (!Array.isArray(parsed)) {
-    return failure(new PrivateEntriesParseError("private entries are not a JSON array"))
-  }
-  return ok(parsed.filter(isValidTag))
+/**
+ * A change to how a NIP-65 relay is used: `true` enables that direction, `false` disables it, absent leaves it as is.
+ */
+interface RelayUsageChange {
+  readonly read?: boolean | undefined
+  readonly write?: boolean | undefined
 }
 
-/** Combine `event.tags` (public) with the decrypted private tags from `event.content` into a `FullList`. */
-export const extractFullList = async (
-  event: { readonly content: string; readonly pubkey: PublicKey; readonly tags: ReadonlyArray<Tag> },
-  decryptFn: DecryptFn | null,
-): Promise<Result<FullList, PrivateEntriesError>> => {
-  const publicTags = event.tags
-  if (!decryptFn || !event.content) return ok({ publicTags, privateTags: [] })
-  const result = await decryptPrivateEntries(event.content, event.pubkey, decryptFn)
-  if (!result.success) return result
-  return ok({ publicTags, privateTags: result.value })
+/**
+ * Apply `change` to `url`'s NIP-65 marker, read across every `r` tag for it: enabling read on a write relay makes it
+ * both, disabling read on a both relay leaves it write, and disabling a relay's last direction removes its `r` tags.
+ * Otherwise the relay is written as one canonical `r` tag, as `addRelayTag` writes it (ADR-0009). Returns `tags` itself
+ * when nothing changes, so callers can tell a no-op by identity.
+ */
+export const setRelayEntryUsage = (
+  tags: ReadonlyArray<Tag>,
+  url: RelayUrl,
+  change: RelayUsageChange,
+): ReadonlyArray<Tag> => {
+  const marker = getRelayEntryMarker(tags, url)
+  const next = relayMarkerFor(
+    change.read ?? (marker === "read" || marker === "both"),
+    change.write ?? (marker === "write" || marker === "both"),
+  )
+  if (next === null) return marker === null ? tags : removeRelayTag(tags, url)
+  const current = tags.filter((t) => isRelayTagFor(t, url))
+  const only = current.length === 1 ? current[0] : undefined
+  return only !== undefined && isSameTag(only, relayTag(url, next)) ? tags : addRelayTag(tags, url, next)
 }
 
-export type { DecryptFn, EventRef, FullList, RelayEntry, RelayMarker }
+export type { EventRef, RelayEntry, RelayMarker, RelayUsageChange }

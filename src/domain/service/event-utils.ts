@@ -1,7 +1,8 @@
+import type { AddressableEventRef } from "../value-object/addressable-ref.ts"
 import type { EventId } from "../value-object/event-id.ts"
 import { isValidEventId } from "../value-object/event-id.ts"
-import { isNumber, isRecord, isString } from "../value-object/guards.ts"
-import type { NostrEvent } from "../value-object/nostr-event.ts"
+import { isNonNegativeInteger, isRecord, isString } from "./guards.ts"
+import type { NostrEvent, UnsignedEvent } from "../value-object/nostr-event.ts"
 import { isValidTagsArray } from "../value-object/nostr-event.ts"
 import type { NostrFilter } from "../value-object/nostr-filter.ts"
 import type { PublicKey } from "../value-object/public-key.ts"
@@ -9,94 +10,102 @@ import type { RelayUrl } from "../value-object/relay-url.ts"
 import { isValidPublicKey } from "../value-object/public-key.ts"
 import { isValidSig } from "../value-object/sig.ts"
 import { decodeNostrEntity, stripNostrUriPrefix } from "./bech32.ts"
+import type { EventToSign } from "./event-id.ts"
+import { isValidKind, kindCategory } from "../value-object/kinds.ts"
 
-/** Result shape of `parseNostrInput` — at most one of `eventId` / `pubkey` / `naddr` is set, plus any relay hints carried by the source NIP-19 entity. */
-export interface ParsedNostrInput {
-  readonly eventId?: EventId
-  readonly pubkey?: PublicKey
-  readonly naddr?: { readonly kind: number; readonly pubkey: PublicKey; readonly dTag: string }
-  readonly relayHints: ReadonlyArray<RelayUrl>
-}
+/**
+ * What `parseNostrInput` resolved a pasted identifier to — an event, a profile or an address — with the relay hints its
+ * NIP-19 entity carried.
+ */
+export type ParsedNostrInput =
+  | { readonly type: "event"; readonly id: EventId; readonly relayHints: ReadonlyArray<RelayUrl> }
+  | { readonly type: "profile"; readonly pubkey: PublicKey; readonly relayHints: ReadonlyArray<RelayUrl> }
+  | { readonly type: "address"; readonly address: AddressableEventRef; readonly relayHints: ReadonlyArray<RelayUrl> }
 
-/** Parse a hex event ID, npub/nprofile/note/nevent/naddr, or `nostr:` URI into its constituent fields and relay hints. */
+/**
+ * Read what a person typed or pasted — a NIP-19 `npub`, `nprofile`, `note`, `nevent` or `naddr`, bare or as a NIP-21
+ * `nostr:` URI, with space around it — as the event, profile or address it names (ADR-0037). A bare 64-character hex
+ * string names nothing on its own: it may be an event id or a public key, and only the caller knows which it expects.
+ */
 export const parseNostrInput = (input: string): ParsedNostrInput | null => {
-  // `isValidEventId` is a type predicate (`(raw): raw is EventId`), so a successful check
-  // narrows `normalised` to `EventId` directly — no second `parseEventId` call needed.
-  const normalised = stripNostrUriPrefix(input).toLowerCase()
-  if (isValidEventId(normalised)) return { eventId: normalised, relayHints: [] }
-
-  const decoded = decodeNostrEntity(normalised)
-  if (!decoded) return null
-
-  if (decoded.type === "npub") return { pubkey: decoded.pubkey, relayHints: [] }
-  if (decoded.type === "nprofile") return { pubkey: decoded.pubkey, relayHints: decoded.relays }
-  if (decoded.type === "note") return { eventId: decoded.eventId, relayHints: [] }
-  if (decoded.type === "nevent") return { eventId: decoded.eventId, relayHints: decoded.relays }
-  if (decoded.type === "naddr") {
-    return {
-      naddr: { kind: decoded.kind, pubkey: decoded.pubkey, dTag: decoded.dTag },
-      relayHints: decoded.relays,
-    }
+  const decoded = decodeNostrEntity(stripNostrUriPrefix(input))
+  if (decoded === null) return null
+  switch (decoded.type) {
+    case "npub":
+      return { type: "profile", pubkey: decoded.pubkey, relayHints: [] }
+    case "nprofile":
+      return { type: "profile", pubkey: decoded.pubkey, relayHints: decoded.relays }
+    case "note":
+      return { type: "event", id: decoded.eventId, relayHints: [] }
+    case "nevent":
+      return { type: "event", id: decoded.eventId, relayHints: decoded.relays }
+    case "naddr":
+      return { type: "address", address: decoded.address, relayHints: decoded.relays }
   }
-
-  return null
-}
-
-/** Construct a `NostrFilter` that fetches the event identified by `parsed`; returns `null` for pubkey-only inputs. */
-export const buildEventFilter = (parsed: ParsedNostrInput): NostrFilter | null => {
-  if (parsed.eventId) return { ids: [parsed.eventId] }
-  if (parsed.naddr) {
-    const { kind, pubkey, dTag } = parsed.naddr
-    return { kinds: [kind], authors: [pubkey], "#d": [dTag], limit: 1 }
-  }
-  return null
 }
 
 /**
- * Single source of truth for the per-field shape check applied to a candidate `NostrEvent`.
- * Both `parseNostrEvent` and `validateEventStructure` iterate this tuple; adding or changing a
- * field is a one-line edit and stays consistent across both APIs.
- *
- * Declared as an `as const` tuple so the field names narrow to a literal-union type without
- * an explicit cast (which the project's `no-type-assertions` lint rule would reject).
+ * The filter for the current event at an address. A plain replaceable event (kind 0, 3, 10002, …) carries no `d` tag,
+ * so its filter leaves `d` out; every other kind keeps the `d` filter.
  */
-const FIELD_CHECKS = [
-  ["id", isValidEventId],
-  ["pubkey", isValidPublicKey],
-  ["kind", isNumber],
-  ["created_at", isNumber],
+export const buildAddressableEventFilter = ({ kind, pubkey, dTag }: AddressableEventRef): NostrFilter =>
+  kindCategory(kind) === "replaceable"
+    ? { kinds: [kind], authors: [pubkey] }
+    : { kinds: [kind], authors: [pubkey], "#d": [dTag] }
+
+/** Construct a `NostrFilter` that fetches the event identified by `parsed`; returns `null` for a profile. */
+export const buildEventFilter = (parsed: ParsedNostrInput): NostrFilter | null => {
+  if (parsed.type === "event") return { ids: [parsed.id] }
+  if (parsed.type === "address") return { ...buildAddressableEventFilter(parsed.address), limit: 1 }
+  return null
+}
+
+const UNSIGNED_EVENT_CHECKS = [
+  ["kind", isValidKind],
+  ["created_at", isNonNegativeInteger],
   ["tags", isValidTagsArray],
   ["content", isString],
-  ["sig", isValidSig],
 ] as const
 
-/** Literal-union of the seven NIP-01 event field names checked by `validateEventStructure`. */
-export type EventStructureField = typeof FIELD_CHECKS[number][0]
+const EVENT_TO_SIGN_CHECKS = [["pubkey", isValidPublicKey], ...UNSIGNED_EVENT_CHECKS] as const
 
-/** One row of `validateEventStructure`'s output: which field, did it pass, and the raw value seen at that key (typed `unknown` because the input is an arbitrary record). */
-export interface EventStructureCheck {
-  readonly field: EventStructureField
-  readonly passed: boolean
-  readonly rawValue: unknown
+const FIELD_CHECKS = [["id", isValidEventId], ...EVENT_TO_SIGN_CHECKS, ["sig", isValidSig]] as const
+
+const isUnsignedEvent = (value: unknown): value is UnsignedEvent =>
+  isRecord(value) && UNSIGNED_EVENT_CHECKS.every(([field, check]) => check(value[field]))
+
+const isEventToSign = (value: unknown): value is EventToSign =>
+  isRecord(value) && EVENT_TO_SIGN_CHECKS.every(([field, check]) => check(value[field]))
+
+const isNostrEvent = (value: unknown): value is NostrEvent =>
+  isRecord(value) && FIELD_CHECKS.every(([field, check]) => check(value[field]))
+
+/**
+ * Validate `value` as an unsigned event template (`kind`, `created_at`, `tags`, `content`); `null` if any field is
+ * invalid. Extra fields are dropped.
+ */
+export const parseUnsignedEvent = (value: unknown): UnsignedEvent | null => {
+  if (!isUnsignedEvent(value)) return null
+  const { kind, created_at, tags, content } = value
+  return { kind, created_at, tags, content }
 }
 
-// File-private TS type-predicate. Exists solely to narrow the return of `parseNostrEvent` to
-// `NostrEvent` without an `as` assertion — the project bans those at every system boundary.
-const isNostrEvent = (value: unknown): value is NostrEvent => {
-  if (!isRecord(value)) return false
-  for (const [field, check] of FIELD_CHECKS) {
-    if (!check(value[field])) return false
-  }
-  return true
+/**
+ * Validate `value` as an unsigned event with its author (`EventToSign`); `null` if any field is invalid. Extra fields
+ * are dropped.
+ */
+export const parseEventToSign = (value: unknown): EventToSign | null => {
+  if (!isEventToSign(value)) return null
+  const { pubkey, kind, created_at, tags, content } = value
+  return { pubkey, kind, created_at, tags, content }
 }
 
-/** Validate `value` as a signed `NostrEvent` (shape only, no signature check); returns `null` if any field is invalid. */
-export const parseNostrEvent = (value: unknown): NostrEvent | null => isNostrEvent(value) ? value : null
-
-/** Report per-field pass/failure status when validating that `event` has the shape of a signed `NostrEvent`. */
-export const validateEventStructure = (event: Record<string, unknown>): ReadonlyArray<EventStructureCheck> =>
-  FIELD_CHECKS.map(([field, check]) => ({
-    field,
-    passed: check(event[field]),
-    rawValue: event[field],
-  }))
+/**
+ * Validate `value` as a signed `NostrEvent` (shape only, no signature check); returns `null` if any field is invalid.
+ * The result carries exactly the seven NIP-01 fields, so serialising it never re-emits a key the input smuggled in.
+ */
+export const parseNostrEvent = (value: unknown): NostrEvent | null => {
+  if (!isNostrEvent(value)) return null
+  const { id, pubkey, created_at, kind, tags, content, sig } = value
+  return { id, pubkey, created_at, kind, tags, content, sig }
+}

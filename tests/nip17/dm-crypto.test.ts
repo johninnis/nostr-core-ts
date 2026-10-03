@@ -1,325 +1,413 @@
-import { assertEquals, assertInstanceOf } from "@std/assert"
-import { buildEventFixture, createMockSigner, resetEventFixtureCounter } from "../../testing.ts"
-import { buildDmGiftWraps, buildRumor, parseRumor, unwrapGiftWrap } from "../../src/application/service/dm-crypto.ts"
+import { assertEquals } from "@std/assert"
+import { buildEventFixture, createStubSigner, eventIdFixture, publicKeyFixture, sigFixture } from "../../testing.ts"
+import { buildDmGiftWraps, unwrapGiftWrap } from "../../src/application/service/dm-crypto.ts"
+import { buildRumour, parseRumour } from "../../src/domain/service/rumour.ts"
+import { buildPrivateMessage, buildPrivateReaction } from "../../src/domain/service/builder.ts"
 import { computeEventId } from "../../src/domain/service/event-id.ts"
 import type { EventToSign } from "../../src/domain/service/event-id.ts"
-import { createLocalSigner, generateSecretKey } from "../../src/infrastructure/adapter/local-signer-adapter.ts"
+import { createLocalSigner } from "../../src/infrastructure/crypto/local-signer.ts"
+import { secretKeyOf } from "../support/keys.ts"
 import type { Signer } from "../../src/domain/service/signer.ts"
 import { failure, ok } from "../../src/domain/value-object/result.ts"
-import { parseEventId } from "../../src/domain/value-object/event-id.ts"
-import { parsePublicKey } from "../../src/domain/value-object/public-key.ts"
-import { parseSig } from "../../src/domain/value-object/sig.ts"
-import { EncryptionError } from "../../src/domain/exception/encryption-error.ts"
-import { GiftWrapUnwrapError } from "../../src/application/exception/gift-wrap-unwrap-error.ts"
-import { SignerError } from "../../src/domain/exception/signer-error.ts"
+import type { Result } from "../../src/domain/value-object/result.ts"
+import { createJsonCipher } from "../../src/application/service/json-crypto.ts"
+import type { NostrEvent, UnsignedEvent } from "../../src/domain/value-object/nostr-event.ts"
+import type { PublicKey } from "../../src/domain/value-object/public-key.ts"
+import type { JsonSerialisable } from "../../src/domain/value-object/json-serialisable.ts"
 
-const PUBKEY_A = parsePublicKey("a".repeat(64))
-const PUBKEY_B = parsePublicKey("b".repeat(64))
-const EPHEMERAL_PUBKEY = parsePublicKey("f".repeat(64))
-const EPHEMERAL_SECRET = new Uint8Array(32).fill(7)
+const PUBKEY_A = publicKeyFixture("a".repeat(64))
+const PUBKEY_B = publicKeyFixture("b".repeat(64))
+const EPHEMERAL_PUBKEY = publicKeyFixture("f".repeat(64))
 
-const mockSigner = (decryptFn: (pubkey: string, ciphertext: string) => Promise<string>): Signer =>
-  createMockSigner({
+const stubSigner = (decryptFn: (pubkey: string, ciphertext: string) => Promise<string>): Signer =>
+  createStubSigner({
     pubkey: PUBKEY_A,
     nip44Decrypt: async (pubkey, ciphertext) => {
       try {
         return ok(await decryptFn(pubkey, ciphertext))
       } catch (err) {
-        return failure(new SignerError("decrypt-failed", err instanceof Error ? err.message : String(err)))
+        return failure({ type: "decrypt-failed", message: err instanceof Error ? err.message : String(err) })
       }
     },
     nip44Encrypt: (_pubkey, plaintext) => ok(`enc:${plaintext}`),
-    signEvent: (event) => ({
-      ...event,
-      id: parseEventId("d".repeat(64)),
-      pubkey: PUBKEY_A,
-      sig: parseSig("e".repeat(128)),
-    }),
+    signEvent: (event) =>
+      ok({
+        ...event,
+        id: eventIdFixture("d".repeat(64)),
+        pubkey: PUBKEY_A,
+        sig: sigFixture("e".repeat(128)),
+      }),
   })
 
-const mockEphemeralSignerFactory = (_secretKey: Uint8Array): Signer =>
-  createMockSigner({
+const stubEphemeralSigner = (): Signer =>
+  createStubSigner({
     pubkey: EPHEMERAL_PUBKEY,
     nip44Encrypt: (_pubkey, plaintext) => ok(`enc:${plaintext}`),
-    signEvent: (event) => ({
-      ...event,
-      id: parseEventId("d".repeat(64)),
-      pubkey: EPHEMERAL_PUBKEY,
-      sig: parseSig("e".repeat(128)),
-    }),
+    signEvent: (event) =>
+      ok({
+        ...event,
+        id: eventIdFixture("d".repeat(64)),
+        pubkey: EPHEMERAL_PUBKEY,
+        sig: sigFixture("e".repeat(128)),
+      }),
   })
 
-const mockGenerateSecretKey = (): Uint8Array => EPHEMERAL_SECRET
+const recipient = createLocalSigner(secretKeyOf(0x11))
+const sender = createLocalSigner(secretKeyOf(0x22))
+const ephemeralSigner = (): Signer => createLocalSigner(secretKeyOf(0x33))
+const FIXED_STAMP = { clock: () => 1800000000, randomUint32: () => 0 }
 
-const cleanup = (): void => {
-  resetEventFixtureCounter()
+const keyOf = async (signer: Signer): Promise<PublicKey> => {
+  const key = await signer.getPublicKey()
+  if (!key.success) throw new Error("a local signer always has its key")
+  return key.value
 }
 
-Deno.test({
-  name: "unwrapGiftWrap returns seal-wrong-kind failure when seal kind is not 13",
-  sanitizeOps: false,
-  sanitizeResources: false,
-  fn: async () => {
-    const signer = mockSigner((_pubkey, _ciphertext) =>
-      Promise.resolve(JSON.stringify({ kind: 99, pubkey: PUBKEY_B, content: "inner" }))
-    )
+const RECIPIENT = await keyOf(recipient)
+const SENDER = await keyOf(sender)
 
-    const event = buildEventFixture({ kind: 1059, content: "encrypted-seal" })
-    const result = await unwrapGiftWrap(signer, event)
+const signed = async (signer: Signer, event: UnsignedEvent): Promise<NostrEvent> => {
+  const result = await signer.signEvent(event)
+  if (!result.success) throw new Error(result.error.message)
+  return result.value
+}
 
-    assertEquals(result.success, false)
-    if (result.success) throw new Error("expected failure")
-    assertInstanceOf(result.error, GiftWrapUnwrapError)
-    assertEquals(result.error.tag, "seal-wrong-kind")
-    cleanup()
-  },
+const encryptedTo = async <T>(signer: Signer, value: T & JsonSerialisable<T>): Promise<string> => {
+  const result = await createJsonCipher(signer).encrypt(RECIPIENT, value)
+  if (!result.success) throw new Error(result.error.type)
+  return result.value
+}
+
+const rawEncryptedTo = async (signer: Signer, plaintext: string): Promise<string> => {
+  const result = await signer.nip44Encrypt(RECIPIENT, plaintext)
+  if (!result.success) throw new Error(result.error.message)
+  return result.value
+}
+
+const wrapAround = (content: string, kind = 1059): Promise<NostrEvent> =>
+  signed(ephemeralSigner(), { kind, created_at: 1700000000, tags: [["p", RECIPIENT]], content })
+
+const wrapOf = async <T>(seal: T & JsonSerialisable<T>, kind = 1059): Promise<NostrEvent> =>
+  wrapAround(await encryptedTo(ephemeralSigner(), seal), kind)
+
+const sealOf = async <T>(rumour: T & JsonSerialisable<T>, fields: Partial<UnsignedEvent> = {}): Promise<NostrEvent> =>
+  signed(sender, {
+    kind: 13,
+    created_at: 1700000000,
+    tags: [],
+    content: await encryptedTo(sender, rumour),
+    ...fields,
+  })
+
+const rumourFields = (overrides: Partial<EventToSign> = {}): EventToSign => ({
+  kind: 14,
+  pubkey: SENDER,
+  created_at: 1700000000,
+  tags: [["p", RECIPIENT]],
+  content: "hello",
+  ...overrides,
+})
+
+const unwrapRumour = async <T>(rumour: T & JsonSerialisable<T>): ReturnType<typeof unwrapGiftWrap> =>
+  unwrapGiftWrap(recipient, await wrapOf(await sealOf(rumour)))
+
+const errorOf = <T, E>(result: Result<T, E>): E | null => result.success ? null : result.error
+
+Deno.test("unwrapGiftWrap - returns the rumour and the seal's signer as the sender", async () => {
+  const result = await unwrapRumour(buildRumour(rumourFields()))
+  assertEquals(result.success && [result.value.senderPubkey, result.value.rumour.content], [SENDER, "hello"])
+})
+
+Deno.test("unwrapGiftWrap - accepts a NIP-17 kind-15 file-message rumour", async () => {
+  const result = await unwrapRumour(buildRumour(rumourFields({ kind: 15 })))
+  assertEquals(result.success ? result.value.rumour.kind : result.error, 15)
+})
+
+Deno.test("unwrapGiftWrap - accepts a rumour of any kind, leaving dispatch to the caller", async () => {
+  const result = await unwrapRumour(buildRumour(rumourFields({ kind: 444 })))
+  assertEquals(result.success ? result.value.rumour.kind : result.error, 444)
+})
+
+Deno.test("unwrapGiftWrap - accepts a NIP-59 kind-21059 ephemeral gift wrap", async () => {
+  const result = await unwrapGiftWrap(recipient, await wrapOf(await sealOf(buildRumour(rumourFields())), 21059))
+  assertEquals(result.success ? result.value.senderPubkey : result.error, SENDER)
+})
+
+Deno.test("unwrapGiftWrap - reports not-gift-wrap for an outer event that is not kind 1059 or 21059", async () => {
+  const result = await unwrapGiftWrap(recipient, await wrapOf(await sealOf(rumourFields()), 4))
+  assertEquals(errorOf(result), "not-gift-wrap")
+})
+
+Deno.test("unwrapGiftWrap - reports wrap-signature-invalid for a gift wrap whose signature does not verify", async () => {
+  const wrap = await wrapOf(await sealOf(rumourFields()))
+  const result = await unwrapGiftWrap(recipient, { ...wrap, sig: sigFixture("0".repeat(128)) })
+  assertEquals(errorOf(result), "wrap-signature-invalid")
+})
+
+Deno.test("unwrapGiftWrap - reports seal-decrypt-failed when the recipient cannot decrypt the gift wrap", async () => {
+  const cipher = createStubSigner({
+    pubkey: RECIPIENT,
+    nip44Decrypt: () => failure({ type: "decrypt-failed", message: "bad payload" }),
+  })
+  const result = await unwrapGiftWrap(cipher, await wrapOf(await sealOf(rumourFields())))
+  assertEquals(errorOf(result), "seal-decrypt-failed")
+})
+
+Deno.test("unwrapGiftWrap - reports seal-malformed for a seal that is not a JSON object", async () => {
+  const result = await unwrapGiftWrap(recipient, await wrapOf(42))
+  assertEquals(errorOf(result), "seal-malformed")
+})
+
+Deno.test("unwrapGiftWrap - reports seal-malformed for a seal whose decrypted plaintext is not JSON", async () => {
+  const result = await unwrapGiftWrap(recipient, await wrapAround(await rawEncryptedTo(ephemeralSigner(), "not json")))
+  assertEquals(errorOf(result), "seal-malformed")
+})
+
+Deno.test("unwrapGiftWrap - reports seal-malformed for an unsigned seal", async () => {
+  const { sig: _sig, ...unsignedSeal } = await sealOf(rumourFields())
+  const result = await unwrapGiftWrap(recipient, await wrapOf(unsignedSeal))
+  assertEquals(errorOf(result), "seal-malformed")
+})
+
+Deno.test("unwrapGiftWrap - reports seal-malformed for a seal with a fractional kind", async () => {
+  const seal = await sealOf(rumourFields())
+  const result = await unwrapGiftWrap(recipient, await wrapOf({ ...seal, kind: 13.5 }))
+  assertEquals(errorOf(result), "seal-malformed")
+})
+
+Deno.test("unwrapGiftWrap - reports seal-malformed for a seal carrying tags", async () => {
+  const seal = await sealOf(rumourFields(), { tags: [["p", RECIPIENT]] })
+  const result = await unwrapGiftWrap(recipient, await wrapOf(seal))
+  assertEquals(errorOf(result), "seal-malformed")
+})
+
+Deno.test("unwrapGiftWrap - reports seal-wrong-kind for a seal that is not kind 13", async () => {
+  const result = await unwrapGiftWrap(recipient, await wrapOf(await sealOf(rumourFields(), { kind: 99 })))
+  assertEquals(errorOf(result), "seal-wrong-kind")
+})
+
+Deno.test("unwrapGiftWrap - reports seal-signature-invalid for a seal whose signature does not verify", async () => {
+  const seal = await sealOf(rumourFields())
+  const result = await unwrapGiftWrap(recipient, await wrapOf({ ...seal, sig: "0".repeat(128) }))
+  assertEquals(errorOf(result), "seal-signature-invalid")
+})
+
+Deno.test("unwrapGiftWrap - reports rumour-decrypt-failed for a seal the recipient cannot decrypt", async () => {
+  const seal = await signed(sender, { kind: 13, created_at: 1700000000, tags: [], content: "not a payload" })
+  const result = await unwrapGiftWrap(recipient, await wrapOf(seal))
+  assertEquals(errorOf(result), "rumour-decrypt-failed")
+})
+
+Deno.test("unwrapGiftWrap - reports rumour-malformed for a rumour whose decrypted plaintext is not JSON", async () => {
+  const content = await rawEncryptedTo(sender, "not json")
+  const seal = await signed(sender, { kind: 13, created_at: 1700000000, tags: [], content })
+  const result = await unwrapGiftWrap(recipient, await wrapOf(seal))
+  assertEquals(errorOf(result), "rumour-malformed")
+})
+
+Deno.test("unwrapGiftWrap - reports rumour-signed for a rumour carrying a signature (NIP-59: the inner event MUST always be unsigned)", async () => {
+  const result = await unwrapRumour(await signed(sender, rumourFields()))
+  assertEquals(errorOf(result), "rumour-signed")
+})
+
+Deno.test("unwrapGiftWrap - reports rumour-id-mismatch when the rumour id does not match its fields", async () => {
+  const result = await unwrapRumour({ ...rumourFields(), id: "0".repeat(64) })
+  assertEquals(errorOf(result), "rumour-id-mismatch")
+})
+
+Deno.test("unwrapGiftWrap - reports rumour-malformed for a rumour with no id (NIP-17: Fields id and created_at are required)", async () => {
+  const result = await unwrapRumour(rumourFields())
+  assertEquals(errorOf(result), "rumour-malformed")
+})
+
+Deno.test("unwrapGiftWrap - reports rumour-pubkey-mismatch when the rumour's author is not the seal's signer", async () => {
+  const result = await unwrapRumour(buildRumour(rumourFields({ pubkey: PUBKEY_B })))
+  assertEquals(errorOf(result), "rumour-pubkey-mismatch")
+})
+
+Deno.test("buildDmGiftWraps wraps a reaction to the sender's own message once to each member (shared ADR-0074)", async () => {
+  const room = { sender: PUBKEY_A, receivers: [PUBKEY_B] }
+  const result = await buildDmGiftWraps({
+    signer: stubSigner((_pubkey, _ciphertext) => Promise.resolve("decrypted")),
+    createEphemeralSigner: stubEphemeralSigner,
+    ...FIXED_STAMP,
+    rumour: buildPrivateReaction(room, buildPrivateMessage(room, "hello")),
+  })
+  assertEquals(result.success && result.value.map((wrap) => wrap.targetPubkey), [PUBKEY_A, PUBKEY_B])
 })
 
 Deno.test({
-  name: "unwrapGiftWrap returns rumor-wrong-kind failure when rumour kind is not 14",
-  sanitizeOps: false,
-  sanitizeResources: false,
+  name: "buildDmGiftWraps returns 2 gift wraps, to the sender and the recipient in room order",
   fn: async () => {
-    let callCount = 0
-    const signer = mockSigner((_pubkey, _ciphertext) => {
-      callCount++
-      if (callCount === 1) {
-        return Promise.resolve(JSON.stringify({ kind: 13, pubkey: PUBKEY_B, content: "encrypted-rumor" }))
-      }
-      return Promise.resolve(
-        JSON.stringify({ kind: 1, pubkey: PUBKEY_B, created_at: 1700000000, tags: [], content: "hello" }),
-      )
-    })
-
-    const event = buildEventFixture({ kind: 1059, content: "encrypted-seal" })
-    const result = await unwrapGiftWrap(signer, event)
-
-    assertEquals(result.success, false)
-    if (result.success) throw new Error("expected failure")
-    assertEquals(result.error.tag, "rumor-wrong-kind")
-    cleanup()
-  },
-})
-
-Deno.test({
-  name: "unwrapGiftWrap returns success with rumour and sender when seal is kind 13 and rumour is kind 14",
-  sanitizeOps: false,
-  sanitizeResources: false,
-  fn: async () => {
-    let callCount = 0
-    const signer = mockSigner((_pubkey, _ciphertext) => {
-      callCount++
-      if (callCount === 1) {
-        return Promise.resolve(JSON.stringify({ kind: 13, pubkey: PUBKEY_B, content: "encrypted-rumor" }))
-      }
-      return Promise.resolve(
-        JSON.stringify({
-          kind: 14,
-          pubkey: PUBKEY_B,
-          created_at: 1700000000,
-          tags: [["p", PUBKEY_A]],
-          content: "hello",
-        }),
-      )
-    })
-
-    const event = buildEventFixture({ kind: 1059, content: "encrypted-seal" })
-    const result = await unwrapGiftWrap(signer, event)
-
-    assertEquals(result.success, true)
-    if (!result.success) throw result.error
-    assertEquals(result.value.senderPubkey, PUBKEY_B)
-    assertEquals(result.value.rumor.kind, 14)
-    assertEquals(result.value.rumor.content, "hello")
-    cleanup()
-  },
-})
-
-Deno.test({
-  name: "unwrapGiftWrap returns not-gift-wrap failure when outer event is not kind 1059",
-  sanitizeOps: false,
-  sanitizeResources: false,
-  fn: async () => {
-    const signer = mockSigner(() =>
-      Promise.resolve(JSON.stringify({ kind: 13, pubkey: PUBKEY_B, content: "encrypted-rumor" }))
-    )
-
-    const event = buildEventFixture({ kind: 4, content: "encrypted-seal" })
-    const result = await unwrapGiftWrap(signer, event)
-
-    assertEquals(result.success, false)
-    if (result.success) throw new Error("expected failure")
-    assertEquals(result.error.tag, "not-gift-wrap")
-    cleanup()
-  },
-})
-
-Deno.test({
-  name: "unwrapGiftWrap returns rumor-pubkey-mismatch failure when rumour pubkey does not match seal pubkey",
-  sanitizeOps: false,
-  sanitizeResources: false,
-  fn: async () => {
-    let callCount = 0
-    const signer = mockSigner((_pubkey, _ciphertext) => {
-      callCount++
-      if (callCount === 1) {
-        return Promise.resolve(JSON.stringify({ kind: 13, pubkey: PUBKEY_B, content: "encrypted-rumor" }))
-      }
-      return Promise.resolve(
-        JSON.stringify({ kind: 14, pubkey: "f".repeat(64), created_at: 1700000000, tags: [], content: "spoofed" }),
-      )
-    })
-
-    const event = buildEventFixture({ kind: 1059, content: "encrypted-seal" })
-    const result = await unwrapGiftWrap(signer, event)
-
-    assertEquals(result.success, false)
-    if (result.success) throw new Error("expected failure")
-    assertEquals(result.error.tag, "rumor-pubkey-mismatch")
-    cleanup()
-  },
-})
-
-Deno.test({
-  name: "unwrapGiftWrap returns seal-decrypt-failed when nip44 decrypt fails on the outer wrap",
-  sanitizeOps: false,
-  sanitizeResources: false,
-  fn: async () => {
-    const signer = createMockSigner({
-      pubkey: PUBKEY_A,
-      nip44Decrypt: () => failure(new SignerError("decrypt-failed", "bad payload")),
-    })
-    const event = buildEventFixture({ kind: 1059, content: "encrypted-seal" })
-    const result = await unwrapGiftWrap(signer, event)
-    assertEquals(result.success, false)
-    if (result.success) throw new Error("expected failure")
-    assertEquals(result.error.tag, "seal-decrypt-failed")
-    cleanup()
-  },
-})
-
-Deno.test({
-  name: "buildDmGiftWraps returns 2 gift wraps for recipient and sender",
-  sanitizeOps: false,
-  sanitizeResources: false,
-  fn: async () => {
-    const signer = mockSigner((_pubkey, _ciphertext) => Promise.resolve("decrypted"))
+    const signer = stubSigner((_pubkey, _ciphertext) => Promise.resolve("decrypted"))
     const result = await buildDmGiftWraps({
       signer,
-      ephemeralSignerFactory: mockEphemeralSignerFactory,
-      generateSecretKey: mockGenerateSecretKey,
-      rumor: await buildRumor({
+      createEphemeralSigner: stubEphemeralSigner,
+      ...FIXED_STAMP,
+      rumour: buildRumour({
         kind: 14,
         pubkey: PUBKEY_A,
         created_at: 1700000000,
         tags: [["p", PUBKEY_B]],
         content: "hello there",
       }),
-      recipientPubkey: PUBKEY_B,
     })
 
     assertEquals(result.success, true)
     if (!result.success) throw result.error
     const wraps = result.value
     assertEquals(wraps.length, 2)
-    assertEquals(wraps[0]?.targetPubkey, PUBKEY_B)
-    assertEquals(wraps[1]?.targetPubkey, PUBKEY_A)
-    cleanup()
+    assertEquals(wraps[0]?.targetPubkey, PUBKEY_A)
+    assertEquals(wraps[1]?.targetPubkey, PUBKEY_B)
   },
 })
 
-Deno.test("parseRumor - returns null for input that is not an object", async () => {
-  assertEquals(await parseRumor("nope"), null)
-  assertEquals(await parseRumor([1, 2, 3]), null)
-  assertEquals(await parseRumor(null), null)
+Deno.test("parseRumour - returns rumour-malformed for input that is not an object", () => {
+  assertEquals(parseRumour("nope"), failure("rumour-malformed"))
+  assertEquals(parseRumour([1, 2, 3]), failure("rumour-malformed"))
+  assertEquals(parseRumour(null), failure("rumour-malformed"))
 })
 
-Deno.test("parseRumor - returns null when pubkey is not a valid public key", async () => {
+Deno.test("parseRumour - returns rumour-malformed when pubkey is not a valid public key", () => {
   assertEquals(
-    await parseRumor({ kind: 14, pubkey: "tooshort", created_at: 1, tags: [], content: "hi" }),
-    null,
+    parseRumour({ kind: 14, pubkey: "tooshort", created_at: 1, tags: [], content: "hi" }),
+    failure("rumour-malformed"),
   )
 })
 
-Deno.test("parseRumor - returns null when tags is not a matrix of strings", async () => {
+Deno.test("parseRumour - returns rumour-malformed when tags is not a matrix of strings", () => {
   assertEquals(
-    await parseRumor({ kind: 14, pubkey: PUBKEY_B, created_at: 1, tags: [[1, 2]], content: "hi" }),
-    null,
+    parseRumour({ kind: 14, pubkey: PUBKEY_B, created_at: 1, tags: [[1, 2]], content: "hi" }),
+    failure("rumour-malformed"),
   )
 })
 
-Deno.test("parseRumor - returns null when a required field is missing", async () => {
-  assertEquals(await parseRumor({ kind: 14, pubkey: PUBKEY_B, tags: [], content: "hi" }), null)
+Deno.test("parseRumour - returns rumour-malformed when a required field is missing", () => {
+  assertEquals(parseRumour({ kind: 14, pubkey: PUBKEY_B, tags: [], content: "hi" }), failure("rumour-malformed"))
 })
 
-Deno.test("parseRumor - returns null when created_at is not a finite integer", async () => {
-  assertEquals(await parseRumor({ kind: 14, pubkey: PUBKEY_B, created_at: NaN, tags: [], content: "hi" }), null)
-  assertEquals(await parseRumor({ kind: 14, pubkey: PUBKEY_B, created_at: -1, tags: [], content: "hi" }), null)
-  assertEquals(await parseRumor({ kind: 14, pubkey: PUBKEY_B, created_at: 1.5, tags: [], content: "hi" }), null)
+Deno.test("parseRumour - returns rumour-malformed when created_at is not a finite integer", () => {
+  assertEquals(
+    parseRumour({ kind: 14, pubkey: PUBKEY_B, created_at: NaN, tags: [], content: "hi" }),
+    failure("rumour-malformed"),
+  )
+  assertEquals(
+    parseRumour({ kind: 14, pubkey: PUBKEY_B, created_at: -1, tags: [], content: "hi" }),
+    failure("rumour-malformed"),
+  )
+  assertEquals(
+    parseRumour({ kind: 14, pubkey: PUBKEY_B, created_at: 1.5, tags: [], content: "hi" }),
+    failure("rumour-malformed"),
+  )
 })
 
-Deno.test("parseRumor - returns null when kind is not a finite non-negative integer", async () => {
-  assertEquals(await parseRumor({ kind: -1, pubkey: PUBKEY_B, created_at: 1, tags: [], content: "hi" }), null)
-  assertEquals(await parseRumor({ kind: NaN, pubkey: PUBKEY_B, created_at: 1, tags: [], content: "hi" }), null)
+Deno.test("parseRumour - returns rumour-malformed when kind is not a finite non-negative integer", () => {
+  assertEquals(
+    parseRumour({ kind: -1, pubkey: PUBKEY_B, created_at: 1, tags: [], content: "hi" }),
+    failure("rumour-malformed"),
+  )
+  assertEquals(
+    parseRumour({ kind: NaN, pubkey: PUBKEY_B, created_at: 1, tags: [], content: "hi" }),
+    failure("rumour-malformed"),
+  )
 })
 
-Deno.test("parseRumor - returns a Rumor for well-formed input", async () => {
-  const rumor = await parseRumor({
+Deno.test("parseRumour - returns a Rumour for well-formed input", () => {
+  const parsed = parseRumour(buildRumour({
     kind: 14,
     pubkey: PUBKEY_B,
     created_at: 1700000000,
     tags: [["p", PUBKEY_A]],
     content: "hello",
-  })
-  assertEquals(rumor?.kind, 14)
-  assertEquals(rumor?.pubkey, PUBKEY_B)
-  assertEquals(rumor?.content, "hello")
+  }))
+  if (!parsed.success) throw new Error(parsed.error)
+  assertEquals([parsed.value.kind, parsed.value.pubkey, parsed.value.content], [14, PUBKEY_B, "hello"])
 })
 
 Deno.test({
-  name: "unwrapGiftWrap returns seal-malformed when the seal is not a JSON object",
-  sanitizeOps: false,
-  sanitizeResources: false,
+  name: "buildDmGiftWraps returns the signer's own SignerFailure when its nip44Encrypt fails",
   fn: async () => {
-    const signer = mockSigner(() => Promise.resolve("42"))
-    const event = buildEventFixture({ kind: 1059, content: "encrypted-seal" })
-    const result = await unwrapGiftWrap(signer, event)
-    assertEquals(result.success, false)
-    if (result.success) throw new Error("expected failure")
-    assertEquals(result.error.tag, "seal-malformed")
-    cleanup()
-  },
-})
-
-Deno.test({
-  name: "buildDmGiftWraps returns EncryptionError when the signer's nip44Encrypt fails",
-  sanitizeOps: false,
-  sanitizeResources: false,
-  fn: async () => {
-    const signer = createMockSigner({
+    const signer = createStubSigner({
       pubkey: PUBKEY_A,
-      nip44Encrypt: () => failure(new SignerError("encrypt-failed", "underlying signer refused")),
+      nip44Encrypt: () => failure({ type: "encrypt-failed", message: "underlying signer refused" }),
     })
     const result = await buildDmGiftWraps({
       signer,
-      ephemeralSignerFactory: () => signer,
-      generateSecretKey: () => new Uint8Array(32),
-      rumor: await buildRumor({
+      createEphemeralSigner: () => signer,
+      ...FIXED_STAMP,
+      rumour: buildRumour({
         kind: 14,
         pubkey: PUBKEY_A,
         created_at: 1700000000,
         tags: [["p", PUBKEY_B]],
         content: "hi",
       }),
-      recipientPubkey: PUBKEY_B,
     })
     assertEquals(result.success, false)
-    if (!result.success) assertEquals(result.error instanceof EncryptionError, true)
-    cleanup()
+    if (!result.success) assertEquals(result.error.type, "encrypt-failed")
   },
 })
 
-const RUMOR_FIELDS: EventToSign = {
+Deno.test("buildDmGiftWraps returns the rejection when the signer declines to sign the seal", async () => {
+  const declined = { type: "rejected" as const, message: "user rejected" }
+  const signer = createStubSigner({
+    pubkey: PUBKEY_A,
+    nip44Encrypt: (_pubkey, plaintext) => ok(`enc:${plaintext}`),
+    signEvent: () => failure(declined),
+  })
+  const result = await buildDmGiftWraps({
+    signer,
+    createEphemeralSigner: stubEphemeralSigner,
+    ...FIXED_STAMP,
+    rumour: buildRumour({ kind: 14, pubkey: PUBKEY_A, created_at: 1700000000, tags: [["p", PUBKEY_B]], content: "hi" }),
+  })
+  assertEquals(result, failure(declined))
+})
+
+Deno.test("buildDmGiftWraps - returns pubkey-mismatch when the rumour's author is not the signer's key (NIP-17: the seal and rumour pubkeys must match)", async () => {
+  const result = await buildDmGiftWraps({
+    signer: recipient,
+    createEphemeralSigner: ephemeralSigner,
+    rumour: buildRumour(rumourFields({ pubkey: SENDER })),
+    ...FIXED_STAMP,
+  })
+  assertEquals(result.success ? null : result.error.type, "pubkey-mismatch")
+})
+
+Deno.test("buildDmGiftWraps - encrypts nothing when the rumour's author is not the signer's key", async () => {
+  let encrypted = 0
+  const signer = createStubSigner({
+    pubkey: PUBKEY_B,
+    nip44Encrypt: (_pubkey, plaintext) => {
+      encrypted += 1
+      return ok(`enc:${plaintext}`)
+    },
+  })
+  await buildDmGiftWraps({
+    signer,
+    createEphemeralSigner: stubEphemeralSigner,
+    ...FIXED_STAMP,
+    rumour: buildRumour({ kind: 14, pubkey: PUBKEY_A, created_at: 1700000000, tags: [["p", PUBKEY_B]], content: "hi" }),
+  })
+  assertEquals(encrypted, 0)
+})
+
+Deno.test("buildDmGiftWraps - returns the signer's failure when it cannot give its key", async () => {
+  const noSigner = { type: "no-signer" as const, message: "no extension" }
+  const signer: Signer = {
+    ...createStubSigner({ pubkey: PUBKEY_A }),
+    getPublicKey: () => Promise.resolve(failure(noSigner)),
+  }
+  const result = await buildDmGiftWraps({
+    signer,
+    createEphemeralSigner: stubEphemeralSigner,
+    ...FIXED_STAMP,
+    rumour: buildRumour({ kind: 14, pubkey: PUBKEY_A, created_at: 1700000000, tags: [["p", PUBKEY_B]], content: "hi" }),
+  })
+  assertEquals(result, failure(noSigner))
+})
+
+const RUMOUR_FIELDS: EventToSign = {
   kind: 14,
   pubkey: PUBKEY_B,
   created_at: 1700000000,
@@ -327,76 +415,86 @@ const RUMOR_FIELDS: EventToSign = {
   content: "hello",
 }
 
-Deno.test("buildRumor - attaches the computed NIP-01 id", async () => {
-  const rumor = await buildRumor(RUMOR_FIELDS)
-  assertEquals(rumor.id, await computeEventId(RUMOR_FIELDS))
-  assertEquals(rumor.content, "hello")
+Deno.test("buildRumour - attaches the computed NIP-01 id", () => {
+  const rumour = buildRumour(RUMOUR_FIELDS)
+  assertEquals(rumour.id, computeEventId(RUMOUR_FIELDS))
+  assertEquals(rumour.content, "hello")
 })
 
-Deno.test("buildRumor - drops fields outside the rumor shape", async () => {
+Deno.test("buildRumour - drops fields outside the rumour shape", () => {
   const signed = buildEventFixture({ kind: 14, content: "hello" })
-  const rumor = await buildRumor(signed)
-  assertEquals("sig" in rumor, false)
-  assertEquals(rumor.id, await computeEventId(signed))
+  const rumour = buildRumour(signed)
+  assertEquals("sig" in rumour, false)
+  assertEquals(rumour.id, computeEventId(signed))
 })
 
-Deno.test("parseRumor - keeps an id that matches the computed id", async () => {
-  const id = await computeEventId(RUMOR_FIELDS)
-  const rumor = await parseRumor({ ...RUMOR_FIELDS, id })
-  assertEquals(rumor?.id, id)
+Deno.test("parseRumour - keeps an id that matches the computed id", () => {
+  const id = computeEventId(RUMOUR_FIELDS)
+  assertEquals(parseRumour({ ...RUMOUR_FIELDS, id }), ok({ ...RUMOUR_FIELDS, id }))
 })
 
-Deno.test("parseRumor - derives the id when the payload has none", async () => {
-  const rumor = await parseRumor(RUMOR_FIELDS)
-  assertEquals(rumor?.id, await computeEventId(RUMOR_FIELDS))
+Deno.test("parseRumour - returns rumour-malformed when the payload has no id (NIP-17: Fields id and created_at are required)", () => {
+  assertEquals(parseRumour(RUMOUR_FIELDS), failure("rumour-malformed"))
 })
 
-Deno.test("parseRumor - returns null when the id does not match the computed id", async () => {
-  assertEquals(await parseRumor({ ...RUMOR_FIELDS, id: "0".repeat(64) }), null)
+Deno.test("parseRumour - returns rumour-id-mismatch for an id that is not an event id at all", () => {
+  const errors = [123, "ABC", null].map((id) => {
+    const parsed = parseRumour({ ...RUMOUR_FIELDS, id })
+    return parsed.success ? null : parsed.error
+  })
+  assertEquals(errors, ["rumour-id-mismatch", "rumour-id-mismatch", "rumour-id-mismatch"])
 })
 
-Deno.test({
-  name: "unwrapGiftWrap returns rumor-id-mismatch when the rumour id does not match its fields",
-  sanitizeOps: false,
-  sanitizeResources: false,
-  fn: async () => {
-    let callCount = 0
-    const signer = mockSigner(() => {
-      callCount++
-      if (callCount === 1) {
-        return Promise.resolve(JSON.stringify({ kind: 13, pubkey: PUBKEY_B, content: "encrypted-rumor" }))
-      }
-      return Promise.resolve(JSON.stringify({ ...RUMOR_FIELDS, id: "0".repeat(64) }))
-    })
-    const result = await unwrapGiftWrap(signer, buildEventFixture({ kind: 1059, content: "encrypted-seal" }))
-    if (result.success) throw new Error("expected failure")
-    assertEquals(result.error.tag, "rumor-id-mismatch")
-    cleanup()
-  },
+Deno.test("parseRumour - returns rumour-id-mismatch when the id does not match the computed id", () => {
+  assertEquals(parseRumour({ ...RUMOUR_FIELDS, id: "0".repeat(64) }), failure("rumour-id-mismatch"))
 })
 
 Deno.test("buildDmGiftWraps then unwrapGiftWrap preserves the rumour id", async () => {
-  const alice = createLocalSigner(generateSecretKey())
-  const bob = createLocalSigner(generateSecretKey())
-  const bobPubkey = await bob.getPublicKey()
-  const rumor = await buildRumor({
+  const alice = sender
+  const bob = recipient
+  const bobKey = await bob.getPublicKey()
+  const aliceKey = await alice.getPublicKey()
+  if (!bobKey.success || !aliceKey.success) throw new Error("a local signer always has its key")
+  const bobPubkey = bobKey.value
+  const rumour = buildRumour({
     kind: 14,
-    pubkey: await alice.getPublicKey(),
+    pubkey: aliceKey.value,
     created_at: 1700000000,
     tags: [["p", bobPubkey]],
     content: "round trip",
   })
   const wraps = await buildDmGiftWraps({
     signer: alice,
-    ephemeralSignerFactory: createLocalSigner,
-    generateSecretKey,
-    rumor,
-    recipientPubkey: bobPubkey,
+    createEphemeralSigner: ephemeralSigner,
+    rumour,
+    ...FIXED_STAMP,
   })
   if (!wraps.success) throw wraps.error
   const forBob = wraps.value.find((wrap) => wrap.targetPubkey === bobPubkey)
   if (!forBob) throw new Error("expected a wrap for bob")
   const unwrapped = await unwrapGiftWrap(bob, forBob.event)
   if (!unwrapped.success) throw unwrapped.error
-  assertEquals(unwrapped.value.rumor, rumor)
+  assertEquals(unwrapped.value.rumour, rumour)
+})
+
+Deno.test("buildDmGiftWraps - stamps the gift wraps from the injected clock and RNG", async () => {
+  const result = await buildDmGiftWraps({
+    signer: stubSigner(() => Promise.resolve("unused")),
+    createEphemeralSigner: stubEphemeralSigner,
+    rumour: buildRumour({ kind: 14, pubkey: PUBKEY_A, created_at: 1700000000, tags: [["p", PUBKEY_B]], content: "hi" }),
+    clock: () => 1800000000,
+    randomUint32: () => 0,
+  })
+  assertEquals(result.success && result.value.map((wrap) => wrap.event.created_at), [1800000000, 1800000000])
+})
+
+Deno.test("parseRumour - returns rumour-malformed for non-string content rather than coercing it (NIP-59 rumour is an unsigned NIP-01 event)", () => {
+  assertEquals(
+    parseRumour({ kind: 14, pubkey: PUBKEY_B, created_at: 1, tags: [], content: 42 }),
+    failure("rumour-malformed"),
+  )
+  assertEquals(
+    parseRumour({ kind: 14, pubkey: PUBKEY_B, created_at: 1, tags: [], content: { text: "hi" } }),
+    failure("rumour-malformed"),
+  )
 })

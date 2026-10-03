@@ -1,20 +1,34 @@
 import type { Tag } from "../value-object/nostr-event.ts"
 import type { EventId } from "../value-object/event-id.ts"
 import type { PublicKey } from "../value-object/public-key.ts"
-import { isParameterisedReplaceable, isReplaceable } from "./kinds.ts"
-import { getTagValue } from "./tags.ts"
+import { kindCategory } from "../value-object/kinds.ts"
+import { soleTagValue } from "./tags.ts"
+
+// Deliberate: disagreeing d tags name no identifier, never the first one — see shared ADR-0014
+/**
+ * An event's `d` tag value, the empty string that identifies an event without one (NIP-01), or `null` when its `d` tags
+ * disagree: such an event names no one identifier (shared ADR-0014).
+ */
+export const getDTag = (tags: ReadonlyArray<Tag>): string | null => {
+  const dTag = soleTagValue(tags, "d")
+  return dTag.state === "absent" ? "" : dTag.value
+}
 
 /**
- * Build a cache/storage key for a replaceable event: `pubkey:kind` (NIP-01 replaceable) or
- * `pubkey:kind:d` (parameterised); `null` for non-replaceable kinds. **This is NOT the
- * `a`-tag wire format** — for that, use `formatAddressableRef` (`kind:pubkey:d`).
+ * Build a cache/storage key for a replaceable event: `pubkey:kind` (NIP-01 replaceable) or `pubkey:kind:d`
+ * (addressable); `null` for non-replaceable kinds and for an addressable event whose `d` tags disagree, which has no
+ * one key. **This is NOT the `a`-tag wire format** — for that, use `formatAddressableRef` (`kind:pubkey:d`).
  */
 export const replaceableStorageKey = (
   event: { readonly pubkey: PublicKey; readonly kind: number; readonly tags: ReadonlyArray<Tag> },
 ): string | null => {
   const { kind, pubkey, tags } = event
-  if (isParameterisedReplaceable(kind)) return `${pubkey}:${kind}:${getTagValue(tags, "d") ?? ""}`
-  if (isReplaceable(kind)) return `${pubkey}:${kind}`
+  const category = kindCategory(kind)
+  if (category === "addressable") {
+    const dTag = getDTag(tags)
+    return dTag === null ? null : `${pubkey}:${kind}:${dTag}`
+  }
+  if (category === "replaceable") return `${pubkey}:${kind}`
   return null
 }
 

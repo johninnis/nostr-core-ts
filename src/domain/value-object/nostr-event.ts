@@ -13,7 +13,10 @@ export const isValidTag = (value: unknown): value is Tag =>
 export const isValidTagsArray = (value: unknown): value is ReadonlyArray<Tag> =>
   Array.isArray(value) && value.every(isValidTag)
 
-/** A NIP-01 event template — every field a signer needs except `id`, `pubkey`, and `sig`. The output of every `build*` function and the input to `Signer.signEvent`. */
+/**
+ * A NIP-01 event template — every field a signer needs except `id`, `pubkey`, and `sig`. The output of every `build*`
+ * function and the input to `Signer.signEvent`.
+ */
 export interface UnsignedEvent {
   readonly kind: number
   readonly content: string
@@ -22,18 +25,17 @@ export interface UnsignedEvent {
 }
 
 /**
- * An event with a stable identity but no signature — `UnsignedEvent` plus `id` and `pubkey`.
- * This is the honest type for a NIP-17 rumor: unsigned by design, identified by its own computed
- * NIP-01 id. The render/transform pipeline accepts this so an unsigned rumor renders through the
- * same path as a signed event. `NostrEvent` is assignable to it — prefer `NostrEvent` everywhere an
- * event is genuinely signed; reach for `RenderableEvent` only where an unsigned rumor may appear.
+ * A NIP-59 rumour: an `UnsignedEvent` with its author `pubkey` and the `id` its fields compute to, and no signature. A
+ * NIP-17 message is one, and so is every event before it is signed; a signed `NostrEvent` is a rumour plus its `sig`.
+ * Code that reads an event without needing its signature takes a `Rumour`, so an unsigned message and a signed event
+ * are read the same way.
  */
-export interface RenderableEvent extends UnsignedEvent {
+export interface Rumour extends UnsignedEvent {
   readonly id: EventId
   readonly pubkey: PublicKey
 }
 
-/** A NIP-01 signed event — `RenderableEvent` plus the branded `sig` field produced by signing. */
-export interface NostrEvent extends RenderableEvent {
+/** A NIP-01 signed event — a `Rumour` plus the branded `sig` field produced by signing. */
+export interface NostrEvent extends Rumour {
   readonly sig: Sig
 }

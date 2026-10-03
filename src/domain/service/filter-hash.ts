@@ -1,13 +1,8 @@
-import { sha256 } from "@noble/hashes/sha2"
 import type { NostrFilter } from "../value-object/nostr-filter.ts"
-import { isRecord } from "../value-object/guards.ts"
-import { formatHex } from "../value-object/hex.ts"
-import { textEncoder } from "../value-object/text-codec.ts"
+import { isRecord } from "./guards.ts"
+import { sha256Hex } from "./sha256.ts"
 
-// Canonical encoding: JSON with every non-ASCII UTF-16 code unit escaped as a lowercase `\uXXXX`
-// (so astral characters become surrogate pairs, matching PHP's `json_encode` without
-// `JSON_UNESCAPED_UNICODE`). The result is pure ASCII, so bytewise sorting agrees across runtimes —
-// this is what keeps the digest identical to the PHP `FilterHasher` for non-ASCII tag/search values.
+// Deliberate: byte-identical to the PHP FilterHasher, hence the post-processed JSON.stringify — see ADR-0014
 const encodeCanonical = (value: unknown): string =>
   JSON.stringify(value).replace(/[\u0080-\uffff]/g, (unit) => `\\u${unit.charCodeAt(0).toString(16).padStart(4, "0")}`)
 
@@ -27,14 +22,12 @@ const canonicalise = (value: unknown): unknown => {
   return value
 }
 
+// Deliberate: a filter carrying a # key NIP-01 does not define is hashed like any other value — see ADR-0014
 /**
- * Lowercase hex SHA-256 of a `REQ` filter set's canonical form. Two filter sets that select the
- * same events — differing only in object-key order, array-element order, or the order of the
- * filters themselves — produce the same digest, so it is safe as a fixed-length subscription dedup
- * key. Synchronous (uses the pure-JS SHA-256) so it can key a subscription map inline.
- *
- * The canonical form is ASCII-safe JSON (non-ASCII escaped as `\uXXXX`), so the digest is identical
- * to the PHP `FilterHasher` for every input, including non-ASCII `search` strings and tag values.
+ * Lowercase hex SHA-256 of a `REQ` filter set's canonical form: object keys and array elements sorted, the filters
+ * included, and every non-ASCII UTF-16 code unit escaped as a lowercase `\uXXXX`. Filter sets that differ only in those
+ * orders share a digest, so it keys a subscription for deduplication, and the digest equals the PHP `FilterHasher`'s
+ * for the same filters. Synchronous.
  */
 export const hashFilters = (filters: ReadonlyArray<NostrFilter>): string =>
-  formatHex(sha256(textEncoder.encode(encodeCanonical(canonicalise(filters)))))
+  sha256Hex(encodeCanonical(canonicalise(filters)))

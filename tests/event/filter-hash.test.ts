@@ -1,10 +1,11 @@
 import { assertEquals, assertMatch, assertNotEquals } from "@std/assert"
 import { hashFilters } from "../../src/domain/service/filter-hash.ts"
+import { sha256Hex } from "../../src/domain/service/sha256.ts"
 import type { NostrFilter } from "../../src/domain/value-object/nostr-filter.ts"
-import { parsePublicKey } from "../../src/domain/value-object/public-key.ts"
+import { publicKeyFixture } from "../../testing.ts"
 
-const authorA = parsePublicKey("a".repeat(64))
-const authorB = parsePublicKey("b".repeat(64))
+const authorA = publicKeyFixture("a".repeat(64))
+const authorB = publicKeyFixture("b".repeat(64))
 
 Deno.test("hashFilters - is stable for the same input", () => {
   const filters: ReadonlyArray<NostrFilter> = [{ kinds: [1, 2], authors: [authorA] }]
@@ -46,10 +47,6 @@ Deno.test("hashFilters - returns a lowercase hex SHA-256 digest", () => {
   assertMatch(hashFilters([{ kinds: [1] }]), /^[0-9a-f]{64}$/)
 })
 
-// Pinned digests of the canonical form, asserted identically in the PHP suite — the
-// cross-language conformance anchors. Equivalent inputs must hash to these exact digests in
-// both runtimes. (The property tests above use language-local inputs — TS brands pubkeys via
-// parsePublicKey, which PHP does not — so conformance rides on these shared anchors.)
 Deno.test('hashFilters - empty filter set hashes to SHA-256 of "[]"', () => {
   assertEquals(hashFilters([]), "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945")
 })
@@ -65,7 +62,6 @@ Deno.test("hashFilters - a single empty filter matches the cross-language anchor
   assertEquals(hashFilters([{}]), "e10808d43975dc400731053386849f864f297e6c4f7519c380f3dbaf7067a840")
 })
 
-// Non-ASCII anchors: the canonical form escapes non-ASCII as \uXXXX, so these match PHP byte for byte.
 Deno.test("hashFilters - escapes a U+2028 search string identically to PHP", () => {
   assertEquals(hashFilters([{ search: "\u2028" }]), "aee96085e5802e7b70a145ffdf6aa7e2335469aa223be66c79c9ad1699ecd7f2")
 })
@@ -86,4 +82,9 @@ Deno.test("hashFilters - sorts astral tag values identically to PHP", () => {
 
 Deno.test("hashFilters - preserves duplicate array elements (equal sort keys)", () => {
   assertNotEquals(hashFilters([{ authors: [authorA, authorA] }]), hashFilters([{ authors: [authorA] }]))
+})
+
+Deno.test("hashFilters - hashes a filter carrying a # key NIP-01 does not define like any other value (ADR-0014)", () => {
+  const unexpressible: NostrFilter = JSON.parse('{"#tt":["x"]}')
+  assertEquals(hashFilters([unexpressible]), sha256Hex('[{"#tt":["x"]}]'))
 })

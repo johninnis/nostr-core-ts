@@ -1,93 +1,88 @@
-import { assertEquals, assertInstanceOf, assertThrows } from "@std/assert"
-import { type Brand, type BrandTools, createBrand, createHexBrand } from "../../src/domain/value-object/mod.ts"
-import { InvalidBrandError } from "../../src/domain/exception/invalid-brand-error.ts"
+import { assertEquals } from "@std/assert"
+import {
+  type Brand,
+  type BrandTools,
+  createBrand,
+  createHexBrand,
+  isLowercaseHex,
+} from "../../src/domain/value-object/mod.ts"
 
 declare const fooBrand: unique symbol
 type Foo = Brand<typeof fooBrand>
 
-Deno.test("createBrand - parse validates and returns a branded value", () => {
-  const tools: BrandTools<Foo, "InvalidFooError"> = createBrand({
-    errorName: "InvalidFooError",
-    errorPrefix: "Invalid Foo",
-    validate: (raw) => raw.startsWith("foo:"),
-  })
-  assertEquals(tools.parse("foo:bar"), "foo:bar")
+const fooTools: BrandTools<Foo> = createBrand({
+  canonicalise: (raw) => {
+    const lowered = raw.trim().toLowerCase()
+    return lowered.startsWith("foo:") ? lowered : null
+  },
 })
 
-Deno.test("createBrand - parse throws InvalidBrandError carrying the tag and raw input", () => {
-  const tools = createBrand<Foo, "InvalidFooError">({
-    errorName: "InvalidFooError",
-    errorPrefix: "Invalid Foo",
-    validate: (raw) => raw.startsWith("foo:"),
-  })
-  const err = assertThrows(() => tools.parse("nope"))
-  assertInstanceOf(err, InvalidBrandError)
-  assertEquals(err.tag, "InvalidFooError")
-  assertEquals(err.raw, "nope")
+Deno.test("createBrand - parse returns the canonical form of valid input", () => {
+  assertEquals<string | null>(fooTools.parse("  FOO:Bar "), "foo:bar")
 })
 
-Deno.test("createBrand - default normaliser lowercases the input", () => {
-  const tools = createBrand<Foo, "InvalidFooError">({
-    errorName: "InvalidFooError",
-    errorPrefix: "Invalid Foo",
-    validate: (raw) => raw === "abc",
-  })
-  assertEquals(tools.parse("ABC"), "abc")
+Deno.test("createBrand - parse returns null for input that has no canonical form", () => {
+  assertEquals(fooTools.parse("nope"), null)
 })
 
-Deno.test("createBrand - custom normaliser overrides the default", () => {
-  const tools = createBrand<Foo, "InvalidFooError">({
-    errorName: "InvalidFooError",
-    errorPrefix: "Invalid Foo",
-    validate: (raw) => raw === "ABC",
-    normalise: (raw) => raw.toUpperCase(),
-  })
-  assertEquals(tools.parse("abc"), "ABC")
+Deno.test("createBrand - parse returns null for non-string input", () => {
+  assertEquals(fooTools.parse(42), null)
+  assertEquals(fooTools.parse(null), null)
+  assertEquals(fooTools.parse(undefined), null)
 })
 
-Deno.test("createBrand - isValid narrows the type and rejects non-string", () => {
-  const tools = createBrand<Foo, "InvalidFooError">({
-    errorName: "InvalidFooError",
-    errorPrefix: "Invalid Foo",
-    validate: (raw) => raw === "abc",
-  })
-  assertEquals(tools.isValid("abc"), true)
-  assertEquals(tools.isValid("nope"), false)
-  assertEquals(tools.isValid(42), false)
-  assertEquals(tools.isValid(null), false)
+Deno.test("createBrand - is accepts only the canonical form", () => {
+  assertEquals(fooTools.is("foo:bar"), true)
+  assertEquals(fooTools.is("FOO:bar"), false)
+  assertEquals(fooTools.is(42), false)
+})
+
+Deno.test("createBrand - is holds exactly when parse returns its input unchanged", () => {
+  for (const raw of ["foo:bar", "FOO:bar", " foo:bar", "nope", ""]) {
+    assertEquals(fooTools.is(raw), fooTools.parse(raw) === raw, raw)
+  }
+})
+
+Deno.test("createBrand - parse rejects a canonicaliser output that is not a fixed point", () => {
+  const unstable = createBrand<Foo>({ canonicalise: (raw) => `${raw}!` })
+  assertEquals(unstable.parse("a"), null)
 })
 
 Deno.test("createHexBrand - parse accepts a lowercase hex string of the given length", () => {
-  const tools = createHexBrand<Foo, "InvalidFooError">({
-    errorName: "InvalidFooError",
-    errorPrefix: "Invalid Foo",
-    hexLength: 8,
-  })
-  assertEquals(tools.parse("deadbeef"), "deadbeef")
+  assertEquals<string | null>(createHexBrand<Foo>(8).parse("deadbeef"), "deadbeef")
+})
+
+Deno.test("createHexBrand - parse rejects upper-case hex", () => {
+  assertEquals(createHexBrand<Foo>(8).parse("DEADBEEF"), null)
 })
 
 Deno.test("createHexBrand - parse rejects wrong length and non-hex", () => {
-  const tools = createHexBrand<Foo, "InvalidFooError">({
-    errorName: "InvalidFooError",
-    errorPrefix: "Invalid Foo",
-    hexLength: 8,
-  })
-  assertThrows(() => tools.parse("deadbee"))
-  assertThrows(() => tools.parse("zzzzzzzz"))
+  const tools = createHexBrand<Foo>(8)
+  assertEquals(tools.parse("deadbee"), null)
+  assertEquals(tools.parse("zzzzzzzz"), null)
 })
 
-Deno.test("createHexBrand - parse lowercases mixed-case hex", () => {
-  const tools = createHexBrand<Foo, "InvalidFooError">({
-    errorName: "InvalidFooError",
-    errorPrefix: "Invalid Foo",
-    hexLength: 8,
-  })
-  assertEquals(tools.parse("DEADBEEF"), "deadbeef")
+Deno.test("createHexBrand - is rejects uppercase hex", () => {
+  const tools = createHexBrand<Foo>(8)
+  assertEquals(tools.is("DEADBEEF"), false)
+  assertEquals(tools.is("deadbeef"), true)
 })
 
-Deno.test("InvalidBrandError - retains the raw input and tag for diagnostics", () => {
-  const err = new InvalidBrandError("InvalidFooError", "Invalid Foo", "junk")
-  assertEquals(err.raw, "junk")
-  assertEquals(err.tag, "InvalidFooError")
-  assertEquals(err.message, "Invalid Foo: junk")
+Deno.test("isLowercaseHex - true for 64 lowercase hex chars", () => {
+  assertEquals(isLowercaseHex("0123456789abcdef".repeat(4), 64), true)
+})
+
+Deno.test("isLowercaseHex - false for uppercase hex (canonical form is lowercase)", () => {
+  assertEquals(isLowercaseHex("A".repeat(64), 64), false)
+})
+
+Deno.test("isLowercaseHex - false for non-hex characters or wrong length", () => {
+  assertEquals(isLowercaseHex("g".repeat(64), 64), false)
+  assertEquals(isLowercaseHex("a".repeat(63), 64), false)
+  assertEquals(isLowercaseHex(" " + "a".repeat(64), 64), false)
+})
+
+Deno.test("isLowercaseHex - checks any length: 128 matches Schnorr signature shape", () => {
+  assertEquals(isLowercaseHex("a".repeat(128), 128), true)
+  assertEquals(isLowercaseHex("a".repeat(127), 128), false)
 })

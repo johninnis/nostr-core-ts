@@ -1,49 +1,73 @@
 import { assertEquals } from "@std/assert"
 import {
+  buildAddressableEventFilter,
   buildEventFilter,
   parseNostrEvent,
   parseNostrInput,
-  validateEventStructure,
 } from "../../src/domain/service/event-utils.ts"
-import { encodeEventIdToNote, encodePubkeyToNpub } from "../../src/domain/service/bech32.ts"
-import { parsePublicKey } from "../../src/domain/value-object/public-key.ts"
-import { parseEventId } from "../../src/domain/value-object/event-id.ts"
+import {
+  encodeEventIdToNote,
+  encodeNaddr,
+  encodeNevent,
+  encodeNprofile,
+  encodePubkeyToNpub,
+} from "../../src/domain/service/bech32.ts"
+import { eventIdFixture, publicKeyFixture, relayUrlFixture } from "../../testing.ts"
 
 const HEX_64 = "a".repeat(64)
 const HEX_PUBKEY = "b".repeat(64)
-const EVENT_ID = parseEventId(HEX_64)
-const PUBKEY = parsePublicKey(HEX_PUBKEY)
+const EVENT_ID = eventIdFixture(HEX_64)
+const PUBKEY = publicKeyFixture(HEX_PUBKEY)
+const RELAY = relayUrlFixture("wss://relay.example.com")
 
-Deno.test("parseNostrInput - reads a bare 64-hex string as an event id", () => {
-  const parsed = parseNostrInput(HEX_64)
-  assertEquals(parsed?.eventId, HEX_64)
-  assertEquals(parsed?.relayHints, [])
-})
-
-Deno.test("parseNostrInput - lowercases an upper-case hex event id", () => {
-  const parsed = parseNostrInput("A".repeat(64))
-  assertEquals(parsed?.eventId, HEX_64)
+Deno.test("parseNostrInput - does not guess what a bare 64-hex string names", () => {
+  assertEquals(parseNostrInput(HEX_64), null)
 })
 
 Deno.test("parseNostrInput - trims surrounding whitespace", () => {
-  const parsed = parseNostrInput(`  ${HEX_64}  `)
-  assertEquals(parsed?.eventId, HEX_64)
+  assertEquals(parseNostrInput(`  ${encodeEventIdToNote(EVENT_ID)}  `), { type: "event", id: EVENT_ID, relayHints: [] })
 })
 
 Deno.test("parseNostrInput - decodes an npub into a pubkey", () => {
-  const parsed = parseNostrInput(encodePubkeyToNpub(PUBKEY))
-  assertEquals(parsed?.pubkey, HEX_PUBKEY)
+  assertEquals(parseNostrInput(encodePubkeyToNpub(PUBKEY)), { type: "profile", pubkey: PUBKEY, relayHints: [] })
 })
 
 Deno.test("parseNostrInput - decodes a note entity into an event id", () => {
-  const parsed = parseNostrInput(encodeEventIdToNote(EVENT_ID))
-  assertEquals(parsed?.eventId, HEX_64)
+  assertEquals(parseNostrInput(encodeEventIdToNote(EVENT_ID)), { type: "event", id: EVENT_ID, relayHints: [] })
+})
+
+Deno.test("parseNostrInput - strips a nostr: URI prefix in any case, with space around it", () => {
+  assertEquals(parseNostrInput(`  NOSTR:${encodePubkeyToNpub(PUBKEY)}  `), {
+    type: "profile",
+    pubkey: PUBKEY,
+    relayHints: [],
+  })
 })
 
 Deno.test("parseNostrInput - strips nostr: URI prefix before decoding", () => {
   const npub = encodePubkeyToNpub(PUBKEY)
-  const parsed = parseNostrInput(`nostr:${npub}`)
-  assertEquals(parsed?.pubkey, HEX_PUBKEY)
+  assertEquals(parseNostrInput(`nostr:${npub}`), { type: "profile", pubkey: PUBKEY, relayHints: [] })
+})
+
+Deno.test("parseNostrInput - carries an nprofile's relay hints", () => {
+  assertEquals(parseNostrInput(encodeNprofile(PUBKEY, [RELAY]) ?? ""), {
+    type: "profile",
+    pubkey: PUBKEY,
+    relayHints: [RELAY],
+  })
+})
+
+Deno.test("parseNostrInput - carries an nevent's relay hints", () => {
+  assertEquals(parseNostrInput(encodeNevent(EVENT_ID, { relayUrls: [RELAY] }) ?? ""), {
+    type: "event",
+    id: EVENT_ID,
+    relayHints: [RELAY],
+  })
+})
+
+Deno.test("parseNostrInput - decodes an naddr, including one with an empty d tag", () => {
+  const address = { kind: 10002, pubkey: PUBKEY, dTag: "" }
+  assertEquals(parseNostrInput(encodeNaddr(address) ?? ""), { type: "address", address, relayHints: [] })
 })
 
 Deno.test("parseNostrInput - returns null for an unrecognised string", () => {
@@ -51,86 +75,45 @@ Deno.test("parseNostrInput - returns null for an unrecognised string", () => {
 })
 
 Deno.test("buildEventFilter - builds an ids filter from an event id", () => {
-  const filter = buildEventFilter({ eventId: EVENT_ID, relayHints: [] })
+  const filter = buildEventFilter({ type: "event", id: EVENT_ID, relayHints: [] })
   assertEquals(filter, { ids: [EVENT_ID] })
 })
 
 Deno.test("buildEventFilter - builds an addressable filter from an naddr", () => {
   const filter = buildEventFilter({
-    naddr: { kind: 30023, pubkey: PUBKEY, dTag: "my-article" },
+    type: "address",
+    address: { kind: 30023, pubkey: PUBKEY, dTag: "my-article" },
     relayHints: [],
   })
   assertEquals(filter, { kinds: [30023], authors: [PUBKEY], "#d": ["my-article"], limit: 1 })
 })
 
-Deno.test("buildEventFilter - returns null when neither an event id nor an naddr is present", () => {
-  assertEquals(buildEventFilter({ relayHints: [] }), null)
+Deno.test("buildEventFilter - leaves the d tag out for an naddr of a replaceable kind", () => {
+  const filter = buildEventFilter({
+    type: "address",
+    address: { kind: 10002, pubkey: PUBKEY, dTag: "" },
+    relayHints: [],
+  })
+  assertEquals(filter, { kinds: [10002], authors: [PUBKEY], limit: 1 })
 })
 
-Deno.test("validateEventStructure - marks every field as passed for a well-formed event", () => {
-  const checks = validateEventStructure({
-    id: HEX_64,
-    pubkey: HEX_PUBKEY,
-    kind: 1,
-    created_at: 1700000000,
-    tags: [],
-    content: "hello",
-    sig: "c".repeat(128),
-  })
-  assertEquals(checks.every((c) => c.passed), true)
+Deno.test("buildAddressableEventFilter - filters an addressable kind by its d tag", () => {
+  const filter = buildAddressableEventFilter({ kind: 30078, pubkey: PUBKEY, dTag: "settings" })
+  assertEquals(filter, { kinds: [30078], authors: [PUBKEY], "#d": ["settings"] })
 })
 
-Deno.test("validateEventStructure - flags a malformed id and signature", () => {
-  const checks = validateEventStructure({
-    id: "short",
-    pubkey: HEX_PUBKEY,
-    kind: 1,
-    created_at: 1700000000,
-    tags: [],
-    content: "hello",
-    sig: "tooshort",
-  })
-  const failed = checks.filter((c) => !c.passed).map((c) => c.field)
-  assertEquals(failed, ["id", "sig"])
+Deno.test("buildAddressableEventFilter - leaves the d tag out for a replaceable kind", () => {
+  const filter = buildAddressableEventFilter({ kind: 0, pubkey: PUBKEY, dTag: "" })
+  assertEquals(filter, { kinds: [0], authors: [PUBKEY] })
 })
 
-Deno.test("validateEventStructure - flags a non-array tags field", () => {
-  const checks = validateEventStructure({
-    id: HEX_64,
-    pubkey: HEX_PUBKEY,
-    kind: 1,
-    created_at: 1700000000,
-    tags: "not-an-array",
-    content: "hello",
-    sig: "c".repeat(128),
-  })
-  assertEquals(checks.find((c) => c.field === "tags")?.passed, false)
+Deno.test("buildAddressableEventFilter - keeps the d tag for a kind that is not replaceable", () => {
+  const filter = buildAddressableEventFilter({ kind: 1, pubkey: PUBKEY, dTag: "" })
+  assertEquals(filter, { kinds: [1], authors: [PUBKEY], "#d": [""] })
 })
 
-Deno.test("validateEventStructure - flags a 64-char id that is not valid hex", () => {
-  const checks = validateEventStructure({
-    id: "z".repeat(64),
-    pubkey: HEX_PUBKEY,
-    kind: 1,
-    created_at: 1700000000,
-    tags: [],
-    content: "hello",
-    sig: "c".repeat(128),
-  })
-  assertEquals(checks.find((c) => c.field === "id")?.passed, false)
-})
-
-Deno.test("validateEventStructure - flags a tags array containing invalid rows", () => {
-  const checks = validateEventStructure({
-    id: HEX_64,
-    pubkey: HEX_PUBKEY,
-    kind: 1,
-    created_at: 1700000000,
-    tags: [[1, 2]],
-    content: "hello",
-    sig: "c".repeat(128),
-  })
-  assertEquals(checks.find((c) => c.field === "tags")?.passed, false)
+Deno.test("buildEventFilter - returns null for a profile", () => {
+  assertEquals(buildEventFilter({ type: "profile", pubkey: PUBKEY, relayHints: [] }), null)
 })
 
 const validEvent = {
@@ -148,6 +131,25 @@ Deno.test("parseNostrEvent - returns a NostrEvent for a well-formed value", () =
   assertEquals(event?.id, HEX_64)
   assertEquals(event?.pubkey, HEX_PUBKEY)
   assertEquals(event?.kind, 1)
+})
+
+Deno.test("parseNostrEvent - keeps exactly the seven NIP-01 fields, so re-serialising never re-emits extras", () => {
+  const parsed = parseNostrEvent({ ...validEvent, evil: "<script>", seen_on: ["wss://x"] })
+  assertEquals(parsed === null ? null : Object.keys(parsed).sort(), [
+    "content",
+    "created_at",
+    "id",
+    "kind",
+    "pubkey",
+    "sig",
+    "tags",
+  ])
+  assertEquals(JSON.stringify(parsed).includes("evil"), false)
+})
+
+Deno.test("parseNostrEvent - returns null for a kind outside NIP-01's 0-65535", () => {
+  assertEquals(parseNostrEvent({ ...validEvent, kind: 65536 }), null)
+  assertEquals(parseNostrEvent({ ...validEvent, kind: 65535 })?.kind, 65535)
 })
 
 Deno.test("parseNostrEvent - returns null for input that is not an object", () => {
@@ -180,4 +182,12 @@ Deno.test("parseNostrEvent - returns null when sig is missing", () => {
 Deno.test("parseNostrEvent - returns null when sig is the wrong length", () => {
   assertEquals(parseNostrEvent({ ...validEvent, sig: "c".repeat(127) }), null)
   assertEquals(parseNostrEvent({ ...validEvent, sig: "c".repeat(129) }), null)
+})
+
+Deno.test("parseNostrEvent - returns null when kind is not an integer", () => {
+  assertEquals(parseNostrEvent({ ...validEvent, kind: 1.5 }), null)
+})
+
+Deno.test("parseNostrEvent - returns null when created_at is negative", () => {
+  assertEquals(parseNostrEvent({ ...validEvent, created_at: -3 }), null)
 })

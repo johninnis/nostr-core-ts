@@ -5,8 +5,6 @@ export {
   encodeNevent,
   encodeNprofile,
   encodePubkeyToNpub,
-  NOSTR_ENTITY_REGEX,
-  pubkeyFromNip19,
   stripNostrUriPrefix,
 } from "./bech32.ts"
 export type {
@@ -28,34 +26,33 @@ export {
   buildLongform,
   buildMetadata,
   buildPrivateMessage,
+  buildPrivateReaction,
   buildReaction,
   buildRelayList,
   buildRepost,
   buildTextNote,
   buildZapRequest,
 } from "./builder.ts"
-export type { BuildLongformInput, DeletionTarget, EngagementTarget, ReplyContext } from "./builder.ts"
-export { buildNewListEvent, buildReplaceableListEvent } from "./replaceable-list.ts"
-export type {
-  BuildNewListEventInput,
-  BuildNewListEventResult,
-  BuildReplaceableListEventInput,
-  BuildReplaceableListEventResult,
-  ListVisibility,
-} from "./replaceable-list.ts"
+export type { BuildLongformInput, BuildZapRequestInput } from "./builder.ts"
+export { buildReply } from "./reply.ts"
+export type { ReplyHint } from "./reply.ts"
 
-export { computeEventId } from "./event-id.ts"
+export { serialiseEvent } from "./event-json.ts"
 export type { EventToSign } from "./event-id.ts"
-export { buildEventFilter, parseNostrEvent, parseNostrInput, validateEventStructure } from "./event-utils.ts"
-export type { EventStructureCheck, EventStructureField, ParsedNostrInput } from "./event-utils.ts"
-export { computeSha256, sha256Hex } from "./sha256.ts"
+export { buildAddressableEventFilter, buildEventFilter, parseNostrEvent, parseNostrInput } from "./event-utils.ts"
+export type { ParsedNostrInput } from "./event-utils.ts"
+export { sha256Hex } from "./sha256.ts"
 export { verifyEventSignature } from "./verify.ts"
+export { buildRumour, buildUnsignedEvent, chatRoomMembers, parseRumour } from "./rumour.ts"
 
-export { eventHasHashtag, extractHashtags, HASHTAG_PATTERN, normaliseHashtag } from "./hashtag.ts"
-export { compileFilter, compileFilters, matchesAnyFilter, matchesFilter } from "./filter.ts"
+export { extractContentReferences, leadingContentReference } from "./content-reference.ts"
+export type { ContentReference } from "./content-reference.ts"
+export { eventHasHashtag, extractHashtags, findHashtags, normaliseHashtag } from "./hashtag.ts"
+export type { HashtagMention } from "./hashtag.ts"
+export { isEventExpired } from "./expiration.ts"
+export { canFilterMatch, compileFilter, compileFilters } from "./filter.ts"
 export type { CompiledFilter } from "./filter.ts"
 export { hashFilters } from "./filter-hash.ts"
-export { byCreatedAtAsc, byCreatedAtDesc } from "./sort.ts"
 
 export {
   serialiseAuthMessage,
@@ -63,52 +60,55 @@ export {
   serialiseEventMessage,
   serialiseReqMessage,
 } from "./client-message.ts"
-export { parseRelayMessage } from "./relay-message.ts"
-export type { RelayMessage } from "./relay-message.ts"
+export { parseReasonPrefix, parseRelayMessage } from "./relay-message.ts"
+export type { ReasonPrefix, RelayMessage } from "./relay-message.ts"
 
-export { isAnyReplaceable, isParameterisedReplaceable, isReplaceable, isRepostKind, REPOST_KINDS } from "./kinds.ts"
-export { replaceableStorageKey, replaceableSupersedes } from "./replaceable.ts"
+export { getDTag, replaceableStorageKey, replaceableSupersedes } from "./replaceable.ts"
+export { emojiShortcodePattern, parseEmojiTags } from "./emoji.ts"
 
 export {
-  addEventTag,
-  addPubkeyTag,
   addRelayTag,
   addTag,
-  decryptPrivateEntries,
   extractEventIds,
   extractEventRefs,
-  extractFullList,
   extractPubkeys,
   extractRelayEntries,
   extractTagValues,
   getRelayEntryMarker,
-  getTagValue,
-  hasEventId,
-  hasPubkey,
   hasRelayEntry,
   hasTag,
-  removeEventTag,
-  removePubkeyTag,
   removeRelayTag,
   removeTag,
+  setRelayEntryUsage,
+  soleTagValue,
 } from "./tags.ts"
-export type { DecryptFn, EventRef, FullList, PrivateEntriesError, RelayEntry, RelayMarker } from "./tags.ts"
+export type { EventRef, RelayEntry, RelayMarker, RelayUsageChange } from "./tags.ts"
 
-export { replyTargetRef, transformEvent } from "./transformer.ts"
+export { analyseEvent, replyTargetRef } from "./event-analysis.ts"
 export { eventOrAddressRefFromTag, parseEventOrAddressRef } from "./event-or-address-ref.ts"
 export type {
-  EventRefs,
-  HighlightData,
-  KindData,
-  LongformData,
-  ReactionData,
-  RepostData,
-  TransformedEvent,
-} from "./transformer.ts"
+  AnalysedEvent,
+  HighlightMetadata,
+  KindMetadata,
+  LongformMetadata,
+  ReactionMetadata,
+  ReplyChain,
+  RepostMetadata,
+} from "./event-analysis.ts"
 
-export { DEFAULT_REACTION, formatReactionEmoji } from "./reaction.ts"
-export { parseBolt11Amount, parseNutzap, parseZapReceipt } from "./zap-parser.ts"
-export type { ZapInfo } from "./zap-parser.ts"
+export { DEFAULT_REACTION } from "./reaction.ts"
+export { parseBolt11Amount, parseNutzap, parseZapReceipt, verifyZapReceipt } from "./zap-parser.ts"
+export type { ZapInfo, ZapReceipt } from "./zap-parser.ts"
+export {
+  isValidLightningAddress,
+  isValidLnurl,
+  lnurlOf,
+  parseLightningAddress,
+  parseLnurl,
+  parseZapAddress,
+  payEndpointUrl,
+} from "./zap-address.ts"
+export type { LightningAddress, Lnurl, ZapAddress } from "./zap-address.ts"
 export {
   buildFileMetadataEvent,
   buildImetaTag,
@@ -117,31 +117,31 @@ export {
   parseImetaTag,
   parseImetaTags,
 } from "./file-metadata.ts"
-export type { FileMetadata } from "./file-metadata.ts"
+export type { FileEventMetadata, FileMetadata } from "./file-metadata.ts"
+export { parseMimeType } from "./mime-type.ts"
 
-export { decryptJson, encryptJson, nip04DecryptJson, nip04EncryptJson } from "./json-crypto.ts"
 export { constantTimeEqual } from "./constant-time-equal.ts"
+export { authChallengesEqual } from "./auth-challenge.ts"
 
-export type { PeerCipher } from "./peer-cipher.ts"
+export type { PeerCipher, PeerCipherFn } from "./peer-cipher.ts"
+export { cipherSchemeOf } from "./cipher-scheme.ts"
+export type { CipherScheme } from "./cipher-scheme.ts"
 export type { Signer, SignerKind } from "./signer.ts"
-export { assertPubkeyMatches } from "./pubkey-match.ts"
+export { checkPubkeyMatches } from "./pubkey-match.ts"
+export { isUserRejection } from "./user-rejection.ts"
 
-export {
-  buildNip98AuthEvent,
-  DEFAULT_AUTH_EXPIRATION_SECONDS,
-  encodeAuthHeader,
-  NIP98_AUTH_HEADER_PREFIX,
-} from "./nip98-builder.ts"
+export { buildNip98AuthEvent } from "./nip98-builder.ts"
 export type { BuildNip98AuthEventInput } from "./nip98-builder.ts"
-export { createNip98Validator, parseAuthHeader } from "./nip98-validator.ts"
-export type {
-  Nip98ReplayGuard,
-  Nip98Validator,
-  Nip98ValidatorOptions,
-  ValidateAuthHeaderRequest,
-  ValidateEventRequest,
-} from "./nip98-validator.ts"
+export { encodeAuthHeader, NIP98_AUTH_HEADER_PREFIX, parseAuthHeader } from "./auth-header.ts"
+export type { ValidateEventRequest } from "./nip98-event-check.ts"
 
-export { errorMessage, reportUnhandledError } from "./error-utils.ts"
 export { randomBytes, randomUint32 } from "./random.ts"
-export type { RandomBytesFn, RandomUint32Fn } from "./random.ts"
+export type { RandomUint32Fn } from "./random.ts"
+
+export { formatHex, parseHex } from "./hex.ts"
+export { isArrayOf, isNumberArray, isRecord, isStringArray } from "./guards.ts"
+export { parseJson } from "./json.ts"
+export { now } from "./timestamp.ts"
+export type { Clock } from "./timestamp.ts"
+export { parseRelayInformation } from "./nip11-info.ts"
+export type { RelayInformation } from "./nip11-info.ts"

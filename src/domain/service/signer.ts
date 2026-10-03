@@ -1,5 +1,7 @@
+import type { SignerFailure } from "../failure/signer-failure.ts"
 import type { NostrEvent, UnsignedEvent } from "../value-object/nostr-event.ts"
 import type { PublicKey } from "../value-object/public-key.ts"
+import type { Result } from "../value-object/result.ts"
 import type { PeerCipher } from "./peer-cipher.ts"
 
 /**
@@ -14,20 +16,14 @@ import type { PeerCipher } from "./peer-cipher.ts"
 export type SignerKind = "local" | "extension" | "bunker"
 
 /**
- * Two error conventions coexist deliberately. **`getPublicKey` and `signEvent` throw**;
- * **`nip04*` and `nip44*` return `Result`**. The split maps to the two semantic categories:
- *
- *   - **Rare-exceptional** (throws): a local signer's `getPublicKey` literally cannot fail;
- *     NIP-07 / NIP-46 signers throw on transport blips or user rejection. Forcing Result on
- *     every caller buys nothing for the common case.
- *   - **Expected-failure-mode** (Result): per-message crypto operations fail often enough that
- *     a structured `SignerError` discriminator is worth the call-site verbosity (locked key,
- *     peer-pubkey rejected, NIP-04 not supported, etc.).
- *
- * See README §"Design conventions → Signer interface: throw vs Result". Don't propose unifying.
+ * The signing port every signer implementation satisfies — NIP-07, NIP-46 and `createLocalSigner` alike. Every method
+ * returns a `Result`: a decline, a missing or disconnected signer, a signer that signed as another key, or a peer that
+ * answered badly is a `Failure(SignerFailure)`, never a throw. A template that is not a NIP-01 event is the caller's
+ * fault, not an outcome: every implementation runs it through `buildUnsignedEvent` before anything signs or is asked
+ * to, so `signEvent` rejects with `InvalidArgumentError` the same way whichever signer it is.
  */
 export interface Signer extends PeerCipher {
   readonly kind: SignerKind
-  readonly getPublicKey: () => Promise<PublicKey>
-  readonly signEvent: (event: UnsignedEvent) => Promise<NostrEvent>
+  readonly getPublicKey: () => Promise<Result<PublicKey, SignerFailure>>
+  readonly signEvent: (event: UnsignedEvent) => Promise<Result<NostrEvent, SignerFailure>>
 }

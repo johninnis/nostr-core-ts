@@ -1,242 +1,203 @@
-import { EncryptionError } from "../../domain/exception/encryption-error.ts"
-import { GiftWrapUnwrapError } from "../exception/gift-wrap-unwrap-error.ts"
-import type { EventToSign } from "../../domain/service/event-id.ts"
-import { computeEventId } from "../../domain/service/event-id.ts"
-import { decryptJson, encryptJson } from "../../domain/service/json-crypto.ts"
+import type { GiftWrapUnwrapFailure } from "../failure/gift-wrap-unwrap-failure.ts"
+import { parseNostrEvent } from "../../domain/service/event-utils.ts"
+import { serialiseEvent } from "../../domain/service/event-json.ts"
+import { isRecord } from "../../domain/service/guards.ts"
+import { verifyEventSignature } from "../../domain/service/verify.ts"
+import type { Rumour } from "../../domain/value-object/nostr-event.ts"
+import { buildRumour, chatRoomMembers, parseRumour } from "../../domain/service/rumour.ts"
+import { checkPubkeyMatches } from "../../domain/service/pubkey-match.ts"
+import { createJsonCipher } from "./json-crypto.ts"
+import type { PeerCipher } from "../../domain/service/peer-cipher.ts"
 import type { Signer } from "../../domain/service/signer.ts"
-import { isRecord } from "../../domain/value-object/guards.ts"
-import { KIND_GIFT_WRAP, KIND_PRIVATE_MESSAGE, KIND_REACTION, KIND_SEAL } from "../../domain/value-object/kinds.ts"
-import type { NostrEvent, RenderableEvent, UnsignedEvent } from "../../domain/value-object/nostr-event.ts"
-import { isValidTag } from "../../domain/value-object/nostr-event.ts"
+import { KIND_EPHEMERAL_GIFT_WRAP, KIND_GIFT_WRAP, KIND_SEAL } from "../../domain/value-object/kinds.ts"
+import type { NostrEvent, Tag } from "../../domain/value-object/nostr-event.ts"
+import { parseDecimalInteger } from "../../domain/service/decimal.ts"
 import type { PublicKey } from "../../domain/value-object/public-key.ts"
-import { isValidPublicKey } from "../../domain/value-object/public-key.ts"
 import type { Result } from "../../domain/value-object/result.ts"
-import { failure, ok } from "../../domain/value-object/result.ts"
+import { failure, isFailure, isOk, ok } from "../../domain/value-object/result.ts"
 import type { RandomUint32Fn } from "../../domain/service/random.ts"
 import { randomUint32 as defaultRandomUint32 } from "../../domain/service/random.ts"
-import type { Clock } from "../../domain/value-object/timestamp.ts"
-import { now } from "../../domain/value-object/timestamp.ts"
+import type { Clock } from "../../domain/service/timestamp.ts"
+import { now } from "../../domain/service/timestamp.ts"
+import { exceedsUtf8Bytes, textEncoder } from "../../domain/service/text-codec.ts"
+import { NIP44_DEFAULT_MAX_PLAINTEXT_SIZE } from "../../domain/service/nip44-ceiling.ts"
+import type { SignerFailure } from "../../domain/failure/signer-failure.ts"
 
 const TWO_DAYS_SECONDS = 2 * 24 * 60 * 60
 const UINT32_RANGE = 0x1_0000_0000
 
-const randomSecondsInWindow = (randomUint32: RandomUint32Fn, windowSeconds: number): number =>
-  Math.floor(randomUint32() / UINT32_RANGE * windowSeconds)
+// Deliberate: a seal holds the rumour's NIP-44 payload in a second plaintext under one ceiling — see ADR-0035
+/**
+ * The largest serialised rumour, in UTF-8 bytes, `buildDmGiftWraps` wraps: 163840. The seal's content is the rumour's
+ * NIP-44 payload, about four thirds of its padded length, and the seal is encrypted again under the same 262144-byte
+ * default ceiling (`NIP44_DEFAULT_MAX_PLAINTEXT_SIZE`). A rumour of 163840 bytes pads to 163840 and gives a payload of
+ * 218548 characters, which a seal holds; the next padded length, 196608, gives 262240, more than the ceiling alone.
+ */
+export const GIFT_WRAP_MAX_RUMOUR_SIZE = 163840
 
-const jitteredPastTimestamp = (clock: Clock, randomUint32: RandomUint32Fn): number =>
-  clock() - randomSecondsInWindow(randomUint32, TWO_DAYS_SECONDS)
+const oversizedRumour = (rumourJson: string): SignerFailure => ({
+  type: "encrypt-failed",
+  message: `Rumour serialises to ${textEncoder.encode(rumourJson).length} bytes; a gift wrap holds at most ` +
+    `${GIFT_WRAP_MAX_RUMOUR_SIZE}, the largest rumour whose seal fits the NIP-44 default plaintext ceiling of ` +
+    `${NIP44_DEFAULT_MAX_PLAINTEXT_SIZE} bytes`,
+})
 
-/** A NIP-59 rumor — an unsigned event that still carries its computed NIP-01 `id` and author `pubkey`. Structurally identical to `RenderableEvent`; aliased rather than duplicated. */
-type Rumor = RenderableEvent
-
-/** Successful output of `unwrapGiftWrap` — the recovered rumor and the seal-signing pubkey (the actual sender, which `giftWrapEvent.pubkey` deliberately hides). */
+/**
+ * Successful output of `unwrapGiftWrap` — the recovered rumour and the seal-signing pubkey (the actual sender, which
+ * `giftWrapEvent.pubkey` deliberately hides).
+ */
 interface UnwrapResult {
-  readonly rumor: Rumor
+  readonly rumour: Rumour
   readonly senderPubkey: PublicKey
 }
 
-interface Seal {
-  readonly kind: number
-  readonly pubkey: PublicKey
-  readonly content: string
-}
+const isSigned = (value: unknown): boolean =>
+  isRecord(value) && value.sig !== undefined && value.sig !== null && value.sig !== ""
 
-const parseSeal = (value: unknown): Seal | null => {
-  if (!isRecord(value)) return null
-  if (typeof value.kind !== "number" || !Number.isInteger(value.kind) || value.kind < 0) return null
-  if (!isValidPublicKey(value.pubkey)) return null
-  if (typeof value.content !== "string") return null
-  return { kind: value.kind, pubkey: value.pubkey, content: value.content }
-}
+// Deliberate: NIP-17 asks for the wrap's expiration on the seal as well, so a seal may carry only that — see ADR-0031
+const isExpirationTag = ([name, value]: Tag): boolean =>
+  name === "expiration" && value !== undefined && parseDecimalInteger(value) !== null
 
-/** Attach the computed NIP-01 `id` to an unsigned event, producing a NIP-59 rumor ready for `buildDmGiftWraps`. */
-export const buildRumor = async (event: EventToSign): Promise<Rumor> => {
-  const { kind, pubkey, created_at, tags, content } = event
-  const fields: EventToSign = { kind, pubkey, created_at, tags, content }
-  return { ...fields, id: await computeEventId(fields) }
-}
-
-const malformedRumor = (): GiftWrapUnwrapError =>
-  new GiftWrapUnwrapError("rumor-malformed", "Rumor payload is not a valid rumor shape")
-
-const readRumor = async (value: unknown): Promise<Result<Rumor, GiftWrapUnwrapError>> => {
-  const seal = parseSeal(value)
-  if (!seal || !isRecord(value)) return failure(malformedRumor())
-  if (typeof value.created_at !== "number" || !Number.isInteger(value.created_at) || value.created_at < 0) {
-    return failure(malformedRumor())
-  }
-  if (!Array.isArray(value.tags) || !value.tags.every(isValidTag)) return failure(malformedRumor())
-  const rumor = await buildRumor({ ...seal, created_at: value.created_at, tags: value.tags })
-  if (value.id !== undefined && value.id !== rumor.id) {
-    return failure(
-      new GiftWrapUnwrapError("rumor-id-mismatch", "Rumor id does not match the id computed from its fields"),
-    )
-  }
-  return ok(rumor)
-}
-
+// Deliberate: any rumour kind; the signatures and the seal-to-rumour author check guard it — see ADR-0031
 /**
- * Validate `value` as a NIP-59 rumor (an unsigned event with a known author pubkey). A present `id`
- * must equal the id computed from the other fields; an absent one is derived. Returns `null` if any
- * field is invalid or the `id` does not match.
- */
-export const parseRumor = async (value: unknown): Promise<Rumor | null> => {
-  const result = await readRumor(value)
-  return result.success ? result.value : null
-}
-
-/**
- * Unwrap a NIP-17 kind-1059 gift wrap into its rumor and the sender's pubkey. Each failure mode
- * gets its own tag so UI callers can surface diagnostics; bulk-feed callers that just want the
- * hot null path do `result.success ? result.value : null`.
+ * Unwrap a NIP-59 kind-1059 gift wrap, or kind-21059 ephemeral gift wrap, into its rumour and the sender's pubkey,
+ * decrypting with `cipher`. The gift wrap and the seal must carry valid signatures, the seal's only tags may be NIP-40
+ * `expiration` tags each naming a decimal Unix timestamp (any other tag makes it `seal-malformed`), and the rumour must
+ * be unsigned (NIP-59: "The inner event MUST always be unsigned") and authored by the seal's signer. The
+ * rumour may be of any kind — a NIP-17 message (14), file message (15), reaction (7) or anything else wrapped — so
+ * callers dispatch on `rumour.kind`. Each failure mode gets its own `GiftWrapUnwrapFailure` literal: a layer that
+ * cannot be decrypted is `seal-decrypt-failed` or `rumour-decrypt-failed`, and one that decrypts to text that is not
+ * JSON is `seal-malformed` or `rumour-malformed`.
  */
 export const unwrapGiftWrap = async (
-  signer: Signer,
+  cipher: PeerCipher,
   giftWrapEvent: NostrEvent,
-): Promise<Result<UnwrapResult, GiftWrapUnwrapError>> => {
-  if (giftWrapEvent.kind !== KIND_GIFT_WRAP) {
-    return failure(
-      new GiftWrapUnwrapError("not-gift-wrap", `Event kind ${giftWrapEvent.kind} is not a gift wrap (1059)`),
-    )
+): Promise<Result<UnwrapResult, GiftWrapUnwrapFailure>> => {
+  if (giftWrapEvent.kind !== KIND_GIFT_WRAP && giftWrapEvent.kind !== KIND_EPHEMERAL_GIFT_WRAP) {
+    return failure("not-gift-wrap")
   }
+  if (!verifyEventSignature(giftWrapEvent)) return failure("wrap-signature-invalid")
 
-  const sealResult = await decryptJson(signer, giftWrapEvent.pubkey, giftWrapEvent.content)
+  const sealResult = await createJsonCipher(cipher).decrypt(giftWrapEvent.pubkey, giftWrapEvent.content)
   if (!sealResult.success) {
-    return failure(
-      new GiftWrapUnwrapError("seal-decrypt-failed", `Seal decrypt failed: ${sealResult.error.tag}`, sealResult.error),
-    )
+    return failure(sealResult.error.type === "json-parse-failed" ? "seal-malformed" : "seal-decrypt-failed")
   }
-  const seal = parseSeal(sealResult.value)
-  if (!seal) {
-    return failure(new GiftWrapUnwrapError("seal-malformed", "Seal payload is not a valid event shape"))
-  }
-  if (seal.kind !== KIND_SEAL) {
-    return failure(
-      new GiftWrapUnwrapError("seal-wrong-kind", `Seal kind ${seal.kind} is not the expected seal kind (13)`),
-    )
-  }
+  const seal = parseNostrEvent(sealResult.value)
+  if (!seal || !seal.tags.every(isExpirationTag)) return failure("seal-malformed")
+  if (seal.kind !== KIND_SEAL) return failure("seal-wrong-kind")
+  if (!verifyEventSignature(seal)) return failure("seal-signature-invalid")
 
-  const rumorResult = await decryptJson(signer, seal.pubkey, seal.content)
-  if (!rumorResult.success) {
-    return failure(
-      new GiftWrapUnwrapError(
-        "rumor-decrypt-failed",
-        `Rumor decrypt failed: ${rumorResult.error.tag}`,
-        rumorResult.error,
-      ),
-    )
+  const rumourResult = await createJsonCipher(cipher).decrypt(seal.pubkey, seal.content)
+  if (!rumourResult.success) {
+    return failure(rumourResult.error.type === "json-parse-failed" ? "rumour-malformed" : "rumour-decrypt-failed")
   }
-  const rumorRead = await readRumor(rumorResult.value)
-  if (!rumorRead.success) return rumorRead
-  const rumor = rumorRead.value
-  if (rumor.kind !== KIND_PRIVATE_MESSAGE && rumor.kind !== KIND_REACTION) {
-    return failure(
-      new GiftWrapUnwrapError(
-        "rumor-wrong-kind",
-        `Rumor kind ${rumor.kind} is not a private message (14) or reaction (7)`,
-      ),
-    )
-  }
-  if (rumor.pubkey !== seal.pubkey) {
-    return failure(
-      new GiftWrapUnwrapError("rumor-pubkey-mismatch", "Rumor pubkey does not match the seal's signing pubkey"),
-    )
-  }
+  if (isSigned(rumourResult.value)) return failure("rumour-signed")
+  const rumourRead = parseRumour(rumourResult.value)
+  if (!rumourRead.success) return rumourRead
+  if (rumourRead.value.pubkey !== seal.pubkey) return failure("rumour-pubkey-mismatch")
 
-  return ok({ rumor, senderPubkey: seal.pubkey })
+  return ok({ rumour: rumourRead.value, senderPubkey: seal.pubkey })
 }
 
-/** One entry of `buildDmGiftWraps`'s output — a signed kind-1059 gift wrap and the recipient pubkey it's addressed to (recipient or sender, since a DM produces two). */
+/**
+ * One entry of `buildDmGiftWraps`'s output — a signed kind-1059 gift wrap and the chat room member it's addressed to (a
+ * receiver or the sender, who gets a wrap too).
+ */
 interface GiftWrapTarget {
   readonly event: NostrEvent
   readonly targetPubkey: PublicKey
 }
 
-interface CreateGiftWrapInput {
-  readonly signer: Signer
-  readonly ephemeralSignerFactory: (secretKey: Uint8Array) => Signer
-  readonly generateSecretKey: () => Uint8Array
-  readonly rumor: Rumor
-  readonly targetPubkey: PublicKey
-  readonly clock: Clock
-  readonly randomUint32: RandomUint32Fn
-}
-
-const buildGiftWrapFor = async (
-  input: CreateGiftWrapInput,
-): Promise<Result<GiftWrapTarget, EncryptionError>> => {
-  const { signer, ephemeralSignerFactory, generateSecretKey, rumor, targetPubkey, clock, randomUint32 } = input
-  const sealedRumor = await encryptJson(signer, targetPubkey, rumor)
-  if (!sealedRumor.success) return failure(new EncryptionError("buildDmGiftWraps", sealedRumor.error))
-
-  const sealTemplate: UnsignedEvent = {
-    kind: KIND_SEAL,
-    created_at: jitteredPastTimestamp(clock, randomUint32),
-    tags: [],
-    content: sealedRumor.value,
-  }
-
-  const signedSeal = await signer.signEvent(sealTemplate)
-  const ephemeralSigner = ephemeralSignerFactory(generateSecretKey())
-
-  const wrappedSeal = await encryptJson(ephemeralSigner, targetPubkey, signedSeal)
-  if (!wrappedSeal.success) return failure(new EncryptionError("buildDmGiftWraps", wrappedSeal.error))
-
-  const giftWrap = await ephemeralSigner.signEvent({
-    kind: KIND_GIFT_WRAP,
-    created_at: jitteredPastTimestamp(clock, randomUint32),
-    tags: [["p", targetPubkey]],
-    content: wrappedSeal.value,
-  })
-
-  return ok({ event: giftWrap, targetPubkey })
-}
-
-/** Input for `buildDmGiftWraps` — the user-facing signer, an ephemeral-signer factory + key generator (used for the per-wrap throwaway keys NIP-17 requires), the rumor to wrap (its `pubkey` is the sender), and the recipient pubkey. */
+/**
+ * Input for `buildDmGiftWraps` — the sender's signer, a source of throwaway signers for the per-wrap keys NIP-59
+ * requires, and the rumour to wrap, which names its chat room (its `pubkey` is the sender, its `p` tags the receivers).
+ */
 export interface BuildDmGiftWrapsInput {
   readonly signer: Signer
-  readonly ephemeralSignerFactory: (secretKey: Uint8Array) => Signer
-  readonly generateSecretKey: () => Uint8Array
-  /** The NIP-59 rumor to wrap (build it with `buildRumor`) — a kind-14 message, a kind-7 reaction, or any other private payload. It is encrypted with its `id`. Its `pubkey` is the sender, who receives the second wrap. */
-  readonly rumor: Rumor
-  readonly recipientPubkey: PublicKey
+  /**
+   * Returns a fresh signer over a new random key for each wrap, e.g. `() => createLocalSigner(generateSecretKey())`.
+   */
+  readonly createEphemeralSigner: () => Signer
+  /**
+   * The NIP-59 rumour to wrap (build it with `buildRumour`) — a kind-14 message, a kind-7 reaction, or any other
+   * private payload. Only its rumour fields are sealed, its `id` computed anew from them by `buildRumour`, so a signed
+   * event passed here is sealed without its `sig` (NIP-59: "The inner event MUST always be unsigned") and no other
+   * field it carries is encrypted. Every member of its chat room ({@link chatRoomMembers}: its `pubkey` and its `p`
+   * tags) receives a wrap.
+   */
+  readonly rumour: Rumour
   /** Clock used for the (jittered) seal/gift-wrap timestamps. Defaults to {@link now}. */
   readonly clock?: Clock
-  /** RNG used to compute the seal/gift-wrap timestamp jitter (NIP-17 §5). Defaults to the web-crypto-backed `randomUint32`. */
+  /**
+   * RNG used to compute the seal/gift-wrap timestamp jitter (NIP-59). Defaults to the web-crypto-backed `randomUint32`.
+   */
   readonly randomUint32?: RandomUint32Fn
 }
 
+const jitteredPastTimestamp = (input: BuildDmGiftWrapsInput): number => {
+  const random = input.randomUint32 ?? defaultRandomUint32
+  return (input.clock ?? now)() - Math.floor(random() / UINT32_RANGE * TWO_DAYS_SECONDS)
+}
+
+const buildGiftWrapFor = async (
+  input: BuildDmGiftWrapsInput,
+  rumour: Rumour,
+  targetPubkey: PublicKey,
+): Promise<Result<GiftWrapTarget, SignerFailure>> => {
+  const sealedRumour = await createJsonCipher(input.signer).encrypt(targetPubkey, rumour)
+  if (!sealedRumour.success) return sealedRumour
+
+  const signedSeal = await input.signer.signEvent({
+    kind: KIND_SEAL,
+    created_at: jitteredPastTimestamp(input),
+    tags: [],
+    content: sealedRumour.value,
+  })
+  if (!signedSeal.success) return signedSeal
+  const ephemeralSigner = input.createEphemeralSigner()
+
+  const wrappedSeal = await ephemeralSigner.nip44Encrypt(targetPubkey, serialiseEvent(signedSeal.value))
+  if (!wrappedSeal.success) return wrappedSeal
+
+  const giftWrap = await ephemeralSigner.signEvent({
+    kind: KIND_GIFT_WRAP,
+    created_at: jitteredPastTimestamp(input),
+    tags: [["p", targetPubkey]],
+    content: wrappedSeal.value,
+  })
+  if (!giftWrap.success) return giftWrap
+
+  return ok({ event: giftWrap.value, targetPubkey })
+}
+
+// Deliberate: no receivers input — the rumour's own room is the one source of who is wrapped to — see ADR-0030
 /**
- * Build the pair of NIP-17 gift wraps (one for the recipient, one for the sender) for any rumor —
- * a kind-14 message, a kind-7 reaction, or other private payload. The caller constructs the rumor;
- * this wraps it to both parties so it stays private and self-readable.
- *
- * **Error contract — two paths, matching the Signer split.** Encryption failures (the user-facing
- * signer's `nip44Encrypt` or the ephemeral signer's encrypt of the seal) are returned as
- * `Failure(EncryptionError)`. Signing failures **throw** (`signer.signEvent` follows the Signer
- * contract: it throws `SigningError` / `SignerRejectedError` / `PubkeyMismatchError`). The two
- * cases are different things; we don't smear a signing rejection into an "encryption" failure tag.
- * Callers should `await` inside a try/catch if they need to distinguish "user denied signing" from
- * "encryption math broke".
- *
- * The two wraps are produced concurrently via `Promise.all`. The first rejection becomes the
- * thrown error; the second wrap's settlement is awaited by the runtime via the `Promise.all`
- * spec contract, so its rejection (if any) cannot escape as an unhandled rejection.
+ * Build the NIP-17 gift wraps for any rumour: one to each member of the chat room the rumour names, its author and
+ * every `p`-tagged pubkey (NIP-17: "The set of `pubkey` + `p` tags defines a chat room" and messages are "gift-wrapped
+ * (`kind:1059`) to each receiver and the sender individually"), each member once, in {@link chatRoomMembers} order. The
+ * room is read from the rumour, so what it addresses is what is wrapped. The signer must hold the rumour's author key,
+ * since the seal it signs must name the rumour's author (NIP-17: "Clients MUST verify if pubkey of the `kind:13` is the
+ * same pubkey as that of the `unsignedMessageRumor`"); a signer holding another key is `pubkey-mismatch`, and nothing
+ * is encrypted. Every failure is a `SignerFailure`: when the signer cannot give its key, or refuses to encrypt or sign
+ * a seal or wrap, it is the signer's own, so a decline keeps its `rejected` type. A rumour serialising to more than
+ * {@link GIFT_WRAP_MAX_RUMOUR_SIZE} UTF-8 bytes is `encrypt-failed` whose message names that limit, and nothing is
+ * encrypted: its seal would exceed the NIP-44 default ceiling, whatever ceiling the signer applies. The wraps are built
+ * concurrently.
  */
 export const buildDmGiftWraps = async (
   input: BuildDmGiftWrapsInput,
-): Promise<Result<ReadonlyArray<GiftWrapTarget>, EncryptionError>> => {
-  const { signer, ephemeralSignerFactory, generateSecretKey, rumor, recipientPubkey } = input
-  const clock = input.clock ?? now
-  const randomUint32 = input.randomUint32 ?? defaultRandomUint32
-
-  const wrap = (targetPubkey: PublicKey): Promise<Result<GiftWrapTarget, EncryptionError>> =>
-    buildGiftWrapFor({ signer, ephemeralSignerFactory, generateSecretKey, rumor, targetPubkey, clock, randomUint32 })
-
-  const [recipient, sender] = await Promise.all([wrap(recipientPubkey), wrap(rumor.pubkey)])
-  if (!recipient.success) return recipient
-  if (!sender.success) return sender
-  return ok([recipient.value, sender.value])
+): Promise<Result<ReadonlyArray<GiftWrapTarget>, SignerFailure>> => {
+  const signerKey = await input.signer.getPublicKey()
+  if (!signerKey.success) return signerKey
+  const mismatch = checkPubkeyMatches(input.rumour.pubkey, signerKey.value)
+  if (mismatch) return failure(mismatch)
+  const rumour = buildRumour(input.rumour)
+  const rumourJson = JSON.stringify(rumour)
+  if (exceedsUtf8Bytes(rumourJson, GIFT_WRAP_MAX_RUMOUR_SIZE)) {
+    return failure(oversizedRumour(rumourJson))
+  }
+  const wraps = await Promise.all(chatRoomMembers(rumour).map((target) => buildGiftWrapFor(input, rumour, target)))
+  return wraps.find(isFailure) ?? ok(wraps.filter(isOk).map((wrap) => wrap.value))
 }
 
-export type { GiftWrapTarget, Rumor, UnwrapResult }
+export type { GiftWrapTarget, UnwrapResult }

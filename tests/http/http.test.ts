@@ -1,21 +1,19 @@
 import { assertEquals } from "@std/assert"
-import { NetworkError, ServerError } from "../../src/application/port/http.ts"
+import { DEFAULT_MAX_BODY_BYTES } from "../../mod.ts"
+import type { HttpRequestFailure, NetworkFailure, ServerFailure } from "../../mod.ts"
 
-Deno.test("NetworkError - carries tag and message", () => {
-  const err = new NetworkError("offline")
-  assertEquals(err.tag, "NetworkError")
-  assertEquals(err.message, "offline")
+const describe = (failure: HttpRequestFailure): string =>
+  failure.type === "server" ? `HTTP ${failure.status}: ${failure.message}` : `offline: ${failure.message}`
+
+Deno.test("HttpRequestFailure - type discriminates a network failure from a server failure", () => {
+  const network: NetworkFailure = { type: "network", message: "connection refused" }
+  const server: ServerFailure = { type: "server", status: 503, message: "service unavailable" }
+  assertEquals([describe(network), describe(server)], [
+    "offline: connection refused",
+    "HTTP 503: service unavailable",
+  ])
 })
 
-Deno.test("ServerError - carries tag, status, and message", () => {
-  const err = new ServerError(503, "service unavailable")
-  assertEquals(err.tag, "ServerError")
-  assertEquals(err.status, 503)
-  assertEquals(err.message, "service unavailable")
-})
-
-Deno.test("HttpRequestError - tag is a usable discriminator", () => {
-  const errs = [new NetworkError("x"), new ServerError(500, "y")]
-  const tags = errs.map((e) => e.tag)
-  assertEquals(tags, ["NetworkError", "ServerError"])
+Deno.test("DEFAULT_MAX_BODY_BYTES - is exported from the package entry point as 16 MiB", () => {
+  assertEquals(DEFAULT_MAX_BODY_BYTES, 16 * 1024 * 1024)
 })

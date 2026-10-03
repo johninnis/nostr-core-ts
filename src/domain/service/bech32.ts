@@ -1,77 +1,103 @@
+import { concatBytes } from "@noble/hashes/utils"
 import { bech32 } from "@scure/base"
 import type { AddressableEventRef } from "../value-object/addressable-ref.ts"
+import { isValidAddressableRef } from "../value-object/addressable-ref.ts"
 import type { EventId } from "../value-object/event-id.ts"
 import { parseEventId } from "../value-object/event-id.ts"
-import { formatHex, parseHex } from "../value-object/hex.ts"
+import { brandBytes, formatHex } from "./hex.ts"
 import type { PublicKey } from "../value-object/public-key.ts"
 import { parsePublicKey } from "../value-object/public-key.ts"
 import type { RelayUrl } from "../value-object/relay-url.ts"
 import { toRelayUrls } from "../value-object/relay-url.ts"
-import { textDecoder, textEncoder } from "../value-object/text-codec.ts"
+import { trimSpaceAndNul } from "../value-object/trim.ts"
+import { isValidKind } from "../value-object/kinds.ts"
+import type { SoleTagValue } from "../value-object/sole-tag-value.ts"
+import { soleValue } from "../value-object/sole-tag-value.ts"
+import { decodeUtf8, textEncoder } from "./text-codec.ts"
 
-interface Bech32Decoded {
+const MAX_ENTITY_LENGTH = 5000
+const MAX_TLV_VALUE_LENGTH = 255
+
+const TLV_SPECIAL = 0
+const TLV_RELAY = 1
+const TLV_AUTHOR = 2
+const TLV_KIND = 3
+
+/** A decoded bech32 string: its human-readable prefix, lowercased, and its payload bytes. */
+export interface Bech32Decoded {
   readonly hrp: string
   readonly bytes: Uint8Array
 }
 
-const tryDecodeBech32 = (str: string): Bech32Decoded | null => {
-  try {
-    const { prefix, words } = bech32.decode(str, false)
-    return { hrp: prefix, bytes: bech32.fromWords(words) }
-  } // deno-lint-ignore innis/no-catch-in-layer -- @scure/base#decode throws on malformed input
-  catch {
-    return null
-  }
+/**
+ * Decode `str` as bech32 of at most 5000 characters, NIP-19's bound, which also covers LNURLs longer than BIP-173's 90;
+ * `null` when it is not, including mixed case.
+ */
+export const decodeBech32 = (str: string): Bech32Decoded | null => {
+  const decoded = bech32.decodeUnsafe(str, MAX_ENTITY_LENGTH)
+  const bytes = decoded && bech32.fromWordsUnsafe(decoded.words)
+  return decoded && bytes ? { hrp: decoded.prefix, bytes } : null
 }
 
 const encodeBech32 = (hrp: string, bytes: Uint8Array): string => bech32.encode(hrp, bech32.toWords(bytes), false)
+
+const CHECKSUM_LENGTH = 6
+
+/** Encode `bytes` as bech32 under `hrp`, or `null` when the result would pass NIP-19's 5000 characters. */
+export const encodeBech32Bounded = (hrp: string, bytes: Uint8Array): string | null => {
+  const words = bech32.toWords(bytes)
+  return hrp.length + 1 + words.length + CHECKSUM_LENGTH > MAX_ENTITY_LENGTH
+    ? null
+    : bech32.encode(hrp, words, MAX_ENTITY_LENGTH)
+}
 
 interface TlvEntry {
   readonly type: number
   readonly value: Uint8Array
 }
 
-const parseTlv = (bytes: Uint8Array): ReadonlyArray<TlvEntry> => {
+const parseTlv = (bytes: Uint8Array): ReadonlyArray<TlvEntry> | null => {
   const entries: Array<TlvEntry> = []
-  // The loop guard (`i + 1 < bytes.length`) proves both reads are in-range, but the type
-  // checker can't see that under `noUncheckedIndexedAccess` — every indexed read is typed
-  // `T | undefined`. The `?? 0` fallback is what the compiler requires; it is unreachable
-  // at runtime because the guard has already ruled out the undefined case.
   let i = 0
-  while (i + 1 < bytes.length) {
-    const type = bytes[i] ?? 0
-    const length = bytes[i + 1] ?? 0
+  while (i < bytes.length) {
+    const type = bytes[i]
+    const length = bytes[i + 1]
+    if (type === undefined || length === undefined) return null
     i += 2
-    if (i + length > bytes.length) break
+    if (i + length > bytes.length) return null
     entries.push({ type, value: bytes.subarray(i, i + length) })
     i += length
   }
   return entries
 }
 
-const decodeBytes = (bytes: Uint8Array): string => textDecoder.decode(bytes)
+const KIND_BYTES = 4
 
-// All callers pass a 4-byte subarray (TLV entries of length 4 — see `tlvFindEntry(..., 3, 4)`),
-// so the four reads are always defined. `?? 0` is what `noUncheckedIndexedAccess` requires;
-// it is unreachable at runtime because the 4-byte invariant has already ruled out undefined.
-const readBigEndian32 = (bytes: Uint8Array): number =>
-  ((bytes[0] ?? 0) << 24) | ((bytes[1] ?? 0) << 16) | ((bytes[2] ?? 0) << 8) | (bytes[3] ?? 0)
+const readKind = (bytes: Uint8Array): number | null => {
+  if (bytes.length !== KIND_BYTES) return null
+  const kind = new DataView(bytes.buffer, bytes.byteOffset, KIND_BYTES).getUint32(0)
+  return isValidKind(kind) ? kind : null
+}
 
-const tlvFindEntry = (
+// Deliberate: repeated records are one claim only when every copy agrees and none is malformed — see shared ADR-0094
+/** The one value the `type` records claim, or `null` when any of them is malformed. */
+const soleRecord = <T extends string | number>(
   entries: ReadonlyArray<TlvEntry>,
   type: number,
-  length: number | null = null,
-): TlvEntry | undefined => entries.find((e) => e.type === type && (length === null || e.value.length === length))
+  read: (bytes: Uint8Array) => T | null,
+): SoleTagValue<T> | null => {
+  const values = entries.filter((e) => e.type === type).map((e) => read(e.value))
+  const wellFormed = values.filter((value) => value !== null)
+  return wellFormed.length === values.length ? soleValue(wellFormed) : null
+}
 
-// Decoded hints are parsed to `RelayUrl` (normalised, deduplicated); a hint that is not a valid
-// relay URL is dropped, so consumers never see a hint they could not connect to.
 const tlvExtractRelays = (entries: ReadonlyArray<TlvEntry>): ReadonlyArray<RelayUrl> =>
-  toRelayUrls(entries.filter((e) => e.type === 1).map((e) => decodeBytes(e.value)))
+  toRelayUrls(entries.filter((e) => e.type === TLV_RELAY).flatMap((e) => decodeUtf8(e.value) ?? []))
 
 /** Decoded NIP-19 `npub1…` payload — carries the already-branded `PublicKey`. */
 type DecodedNpub = { readonly type: "npub"; readonly pubkey: PublicKey }
-/** Decoded NIP-19 `note1…` payload — carries the already-branded `EventId`. */
-type DecodedNote = { readonly type: "note"; readonly eventId: EventId }
+/** Decoded NIP-19 `note1…` payload — carries the already-branded `EventId`, and no pubkey. */
+type DecodedNote = { readonly type: "note"; readonly eventId: EventId; readonly pubkey: null }
 /** Decoded NIP-19 `nprofile1…` payload — pubkey plus optional relay hints (TLV type 1). */
 type DecodedNprofile = {
   readonly type: "nprofile"
@@ -86,179 +112,173 @@ type DecodedNevent = {
   readonly pubkey: PublicKey | null
   readonly kind: number | null
 }
-/** Decoded NIP-19 `naddr1…` payload — addressable-event coordinate (`kind` + `pubkey` + `dTag`) plus optional relay hints. */
+/**
+ * Decoded NIP-19 `naddr1…` payload — the addressable-event coordinate, its author's pubkey, and optional relay hints.
+ */
 type DecodedNaddr = {
   readonly type: "naddr"
-  readonly dTag: string
-  readonly relays: ReadonlyArray<RelayUrl>
+  readonly address: AddressableEventRef
   readonly pubkey: PublicKey
-  readonly kind: number
+  readonly relays: ReadonlyArray<RelayUrl>
 }
 
-/** Discriminated union returned by `decodeNostrEntity` — branch on `.type` to access the entity-specific fields. */
+// Deliberate: every entity names its pubkey, or null, so a caller finds it without branching on type — see ADR-0003
+/**
+ * Discriminated union returned by `decodeNostrEntity` — branch on `.type` to access the entity-specific fields. Every
+ * member carries `pubkey`: the key an `npub` or `nprofile` encodes, an `nevent`'s author or `null`, an `naddr`'s
+ * author, and `null` for a `note`.
+ */
 type DecodedEntity = DecodedNpub | DecodedNote | DecodedNprofile | DecodedNevent | DecodedNaddr
 
-/** Decode a NIP-19 bech32 entity (`npub`, `note`, `nprofile`, `nevent`, `naddr`); `nostr:` prefix is tolerated. */
-export const decodeNostrEntity = (str: string): DecodedEntity | null => {
-  const normalised = str.replace(/^nostr:/i, "").trim()
-  const decoded = tryDecodeBech32(normalised.toLowerCase())
-  if (!decoded) return null
+const pubkeyOf = (bytes: Uint8Array): PublicKey | null => bytes.length === 32 ? parsePublicKey(formatHex(bytes)) : null
 
-  if (decoded.hrp === "npub" && decoded.bytes.length === 32) {
-    return { type: "npub", pubkey: parsePublicKey(formatHex(decoded.bytes)) }
-  }
+const eventIdOf = (bytes: Uint8Array): EventId | null => bytes.length === 32 ? parseEventId(formatHex(bytes)) : null
 
-  if (decoded.hrp === "note" && decoded.bytes.length === 32) {
-    return { type: "note", eventId: parseEventId(formatHex(decoded.bytes)) }
-  }
+const decodeNprofile = (entries: ReadonlyArray<TlvEntry>): DecodedNprofile | null => {
+  const pubkey = soleRecord(entries, TLV_SPECIAL, pubkeyOf)?.value ?? null
+  return pubkey === null ? null : { type: "nprofile", pubkey, relays: tlvExtractRelays(entries) }
+}
 
-  const entries = parseTlv(decoded.bytes)
+const decodeNevent = (entries: ReadonlyArray<TlvEntry>): DecodedNevent | null => {
+  const eventId = soleRecord(entries, TLV_SPECIAL, eventIdOf)?.value ?? null
+  const author = soleRecord(entries, TLV_AUTHOR, pubkeyOf)
+  const kind = soleRecord(entries, TLV_KIND, readKind)
+  if (eventId === null || author === null || kind === null) return null
+  return { type: "nevent", eventId, relays: tlvExtractRelays(entries), pubkey: author.value, kind: kind.value }
+}
 
-  if (decoded.hrp === "nprofile") {
-    const pubkeyEntry = tlvFindEntry(entries, 0, 32)
-    if (!pubkeyEntry) return null
-    return {
-      type: "nprofile",
-      pubkey: parsePublicKey(formatHex(pubkeyEntry.value)),
-      relays: tlvExtractRelays(entries),
-    }
-  }
+const decodeNaddr = (entries: ReadonlyArray<TlvEntry>): DecodedNaddr | null => {
+  const dTag = soleRecord(entries, TLV_SPECIAL, decodeUtf8)?.value ?? null
+  const pubkey = soleRecord(entries, TLV_AUTHOR, pubkeyOf)?.value ?? null
+  const kind = soleRecord(entries, TLV_KIND, readKind)?.value ?? null
+  if (dTag === null || pubkey === null || kind === null) return null
+  const address = { kind, pubkey, dTag }
+  return isValidAddressableRef(address) ? { type: "naddr", address, pubkey, relays: tlvExtractRelays(entries) } : null
+}
 
-  if (decoded.hrp === "nevent") {
-    const eventIdEntry = tlvFindEntry(entries, 0, 32)
-    if (!eventIdEntry) return null
-    const pubkeyEntry = tlvFindEntry(entries, 2, 32)
-    const kindEntry = tlvFindEntry(entries, 3, 4)
-    const kind = kindEntry ? readBigEndian32(kindEntry.value) : null
-    return {
-      type: "nevent",
-      eventId: parseEventId(formatHex(eventIdEntry.value)),
-      relays: tlvExtractRelays(entries),
-      pubkey: pubkeyEntry ? parsePublicKey(formatHex(pubkeyEntry.value)) : null,
-      kind,
-    }
-  }
-
-  if (decoded.hrp === "naddr") {
-    const dTagEntry = tlvFindEntry(entries, 0)
-    const pubkeyEntry = tlvFindEntry(entries, 2, 32)
-    const kindEntry = tlvFindEntry(entries, 3, 4)
-    if (!pubkeyEntry || !kindEntry) return null
-    return {
-      type: "naddr",
-      dTag: dTagEntry ? decodeBytes(dTagEntry.value) : "",
-      relays: tlvExtractRelays(entries),
-      pubkey: parsePublicKey(formatHex(pubkeyEntry.value)),
-      kind: readBigEndian32(kindEntry.value),
-    }
-  }
-
+const decodeTlvEntity = (hrp: string, bytes: Uint8Array): DecodedEntity | null => {
+  const entries = parseTlv(bytes)
+  if (entries === null) return null
+  if (hrp === "nprofile") return decodeNprofile(entries)
+  if (hrp === "nevent") return decodeNevent(entries)
+  if (hrp === "naddr") return decodeNaddr(entries)
   return null
 }
 
-const buildTlv = (entries: ReadonlyArray<TlvEntry>): Uint8Array => {
-  let totalLength = 0
-  for (const { value } of entries) totalLength += 2 + value.length
-  const out = new Uint8Array(totalLength)
-  let i = 0
-  for (const { type, value } of entries) {
-    out[i++] = type
-    out[i++] = value.length
-    out.set(value, i)
-    i += value.length
+/**
+ * Decode a bare NIP-19 bech32 entity (`npub`, `note`, `nprofile`, `nevent`, `naddr`), exactly as written: a `nostr:`
+ * URI or space around the entity is user input, read by `parseNostrInput` (ADR-0037). Returns `null` for anything
+ * NIP-19 does not allow: a string over 5000 characters, mixed case, a truncated TLV stream, a missing or malformed
+ * required record, a present but malformed optional record, an `naddr` identifier that is not valid UTF-8, a kind
+ * outside 0–65535, or an `naddr` that is not {@link isValidAddressableRef}. Text records are read as UTF-8 exactly as
+ * written, a byte order mark included; a relay hint that is not valid UTF-8 is dropped like any other hint with no
+ * canonical relay URL form. TLV types NIP-19 does not define are ignored. A record repeated with one value is read
+ * once; records of one type that disagree name nothing, so an `nevent`'s author or kind is then `null` and an entity
+ * missing its required record is `null`.
+ */
+export const decodeNostrEntity = (str: string): DecodedEntity | null => {
+  const decoded = decodeBech32(str)
+  if (!decoded) return null
+  const { hrp, bytes } = decoded
+
+  if (hrp === "note") {
+    const eventId = eventIdOf(bytes)
+    return eventId ? { type: "note", eventId, pubkey: null } : null
   }
-  return out
+  if (hrp === "npub") {
+    const pubkey = pubkeyOf(bytes)
+    return pubkey ? { type: "npub", pubkey } : null
+  }
+  return decodeTlvEntity(hrp, bytes)
 }
+
+const buildTlv = (entries: ReadonlyArray<TlvEntry>): Uint8Array | null =>
+  entries.some(({ value }) => value.length > MAX_TLV_VALUE_LENGTH)
+    ? null
+    : concatBytes(...entries.flatMap(({ type, value }) => [Uint8Array.of(type, value.length), value]))
 
 const encodeBytes = (str: string): Uint8Array => textEncoder.encode(str)
 
-// Relay-hint inputs to the NIP-19 encoders (`encodeNprofile` / `encodeNevent` / `encodeNaddr`)
-// are typed `ReadonlyArray<string>` rather than `ReadonlyArray<RelayUrl>`. NIP-19 relay hints
-// are advisory and have no canonical form on the wire — relays do exist that don't satisfy
-// `parseRelayUrl`'s strict `wss?://` regex, and rejecting them at the encoder boundary would
-// just push the workaround into callers. If brand validation matters at your boundary, pipe
-// inputs through `parseRelayUrl` or `normaliseRelayUrl` *before* handing them to the encoder.
-const tlvAddRelays = (entries: Array<TlvEntry>, relayUrls: ReadonlyArray<string>): void => {
-  for (const url of relayUrls) entries.push({ type: 1, value: encodeBytes(url) })
+const relayEntries = (relayUrls: ReadonlyArray<RelayUrl>): ReadonlyArray<TlvEntry> =>
+  [...new Set(relayUrls)].map((url) => ({ type: TLV_RELAY, value: encodeBytes(url) }))
+
+const encodeTlvEntity = (hrp: string, entries: ReadonlyArray<TlvEntry>): string | null => {
+  const bytes = buildTlv(entries)
+  return bytes === null ? null : encodeBech32Bounded(hrp, bytes)
 }
 
-const encodeTlvEntity = (hrp: string, entries: ReadonlyArray<TlvEntry>): string => encodeBech32(hrp, buildTlv(entries))
+const encodeKind = (kind: number): Uint8Array | null => {
+  if (!isValidKind(kind)) return null
+  const bytes = new Uint8Array(KIND_BYTES)
+  new DataView(bytes.buffer).setUint32(0, kind)
+  return bytes
+}
 
 /** Encode a 32-byte hex public key as its NIP-19 `npub1...` string. */
-export const encodePubkeyToNpub = (pubkey: PublicKey): string => encodeBech32("npub", parseHex(pubkey))
+export const encodePubkeyToNpub = (pubkey: PublicKey): string => encodeBech32("npub", brandBytes(pubkey))
 
 /** Encode a 32-byte hex event ID as its NIP-19 `note1...` string. */
-export const encodeEventIdToNote = (eventId: EventId): string => encodeBech32("note", parseHex(eventId))
+export const encodeEventIdToNote = (eventId: EventId): string => encodeBech32("note", brandBytes(eventId))
 
-/** Encode an `nprofile1...` containing `pubkey` and optional relay hints (NIP-19 TLV type 1). */
-export const encodeNprofile = (pubkey: PublicKey, relayUrls: ReadonlyArray<string> = []): string => {
-  const entries: Array<TlvEntry> = [{ type: 0, value: parseHex(pubkey) }]
-  tlvAddRelays(entries, relayUrls)
-  return encodeTlvEntity("nprofile", entries)
-}
+/**
+ * Encode an `nprofile1...` containing `pubkey` and optional relay hints (NIP-19 TLV type 1), each a canonical
+ * `RelayUrl` written once, at its first position (shared ADR-0084). Returns `null` when the result would exceed 5000
+ * characters.
+ */
+export const encodeNprofile = (pubkey: PublicKey, relayUrls: ReadonlyArray<RelayUrl> = []): string | null =>
+  encodeTlvEntity("nprofile", [{ type: TLV_SPECIAL, value: brandBytes(pubkey) }, ...relayEntries(relayUrls)])
 
-const encodeBigEndian32 = (value: number): Uint8Array =>
-  new Uint8Array([(value >> 24) & 0xff, (value >> 16) & 0xff, (value >> 8) & 0xff, value & 0xff])
-
-/** Options for `encodeNevent` — relay hints (TLV type 1), optional author pubkey (TLV type 2), and optional kind (TLV type 3). */
+/**
+ * The optional fields of the `nevent` `encodeNevent` encodes — relay hints (TLV type 1), author pubkey (TLV type 2) and
+ * kind (TLV type 3). One input object because each is a field of that one entity.
+ */
 export interface EncodeNeventOptions {
-  readonly relayUrls?: ReadonlyArray<string>
-  readonly authorPubkey?: PublicKey | null
-  readonly kind?: number | null
+  readonly relayUrls?: ReadonlyArray<RelayUrl>
+  readonly authorPubkey?: PublicKey
+  readonly kind?: number
 }
 
-/** Encode an `nevent1...` containing `eventId` and optional relay hints / author pubkey / kind. */
-export const encodeNevent = (eventId: EventId, options: EncodeNeventOptions = {}): string => {
-  const entries: Array<TlvEntry> = [{ type: 0, value: parseHex(eventId) }]
-  tlvAddRelays(entries, options.relayUrls ?? [])
-  if (options.authorPubkey) entries.push({ type: 2, value: parseHex(options.authorPubkey) })
-  if (options.kind !== undefined && options.kind !== null) {
-    entries.push({ type: 3, value: encodeBigEndian32(options.kind) })
+/**
+ * Encode an `nevent1...` containing `eventId` and optional relay hints (canonical `RelayUrl`s, each written once at its
+ * first position, shared ADR-0084) / author pubkey / kind. Returns `null` when the kind is outside NIP-01's 0–65535, or
+ * the result would exceed 5000 characters.
+ */
+export const encodeNevent = (eventId: EventId, options: EncodeNeventOptions = {}): string | null => {
+  const entries: Array<TlvEntry> = [
+    { type: TLV_SPECIAL, value: brandBytes(eventId) },
+    ...relayEntries(options.relayUrls ?? []),
+  ]
+  if (options.authorPubkey !== undefined) entries.push({ type: TLV_AUTHOR, value: brandBytes(options.authorPubkey) })
+  if (options.kind !== undefined) {
+    const kind = encodeKind(options.kind)
+    if (kind === null) return null
+    entries.push({ type: TLV_KIND, value: kind })
   }
   return encodeTlvEntity("nevent", entries)
 }
 
-/** Encode an `naddr1...` for an addressable event coordinate, with optional relay hints. */
-export const encodeNaddr = (
-  { dTag, pubkey, kind }: AddressableEventRef,
-  relayUrls: ReadonlyArray<string> = [],
-): string => {
-  const entries: Array<TlvEntry> = [{ type: 0, value: encodeBytes(dTag) }]
-  tlvAddRelays(entries, relayUrls)
-  entries.push({ type: 2, value: parseHex(pubkey) })
-  entries.push({ type: 3, value: encodeBigEndian32(kind) })
-  return encodeTlvEntity("naddr", entries)
+/**
+ * Encode an `naddr1...` for an addressable event coordinate, with optional relay hints (canonical `RelayUrl`s, each
+ * written once at its first position, shared ADR-0084). Returns `null` for what {@link decodeNostrEntity} would reject:
+ * a coordinate that is not {@link isValidAddressableRef}, an identifier longer than 255 bytes, or a result over 5000
+ * characters.
+ */
+export const encodeNaddr = (address: AddressableEventRef, relayUrls: ReadonlyArray<RelayUrl> = []): string | null => {
+  const kind = encodeKind(address.kind)
+  if (kind === null || !isValidAddressableRef(address)) return null
+  return encodeTlvEntity("naddr", [
+    { type: TLV_SPECIAL, value: encodeBytes(address.dTag) },
+    ...relayEntries(relayUrls),
+    { type: TLV_AUTHOR, value: brandBytes(address.pubkey) },
+    { type: TLV_KIND, value: kind },
+  ])
 }
 
 /**
- * Match NIP-19 entities (`npub1…`, `nprofile1…`, `note1…`, `nevent1…`, `naddr1…`)
- * inside free text, with or without a leading `nostr:` prefix. The captured group
- * (index 1) is the bare bech32 string ready to feed into {@link decodeNostrEntity}.
- *
- * Use this regex **only** with `String#matchAll` (or after explicitly resetting `lastIndex`).
- * The `g` flag is required for `matchAll` but makes `.test()`/`.exec()` *stateful*: the second
- * call would start from where the first left off and may silently skip matches. Don't reach
- * for `.test()` here; use `matchAll(...).next().done === false` or `String#match` instead.
+ * Strip a leading `nostr:` URI prefix from `input` (case-insensitive), with the space, tab, line feed, carriage return,
+ * NUL and vertical tab around the input and around what follows the prefix.
  */
-export const NOSTR_ENTITY_REGEX = /(?:nostr:|\b)((?:npub1|nprofile1|note1|nevent1|naddr1)(?:(?!nostr:)[a-z0-9])+)/gi
-
-/** Trim whitespace and strip a leading `nostr:` URI prefix from `input` (case-insensitive). */
-export const stripNostrUriPrefix = (input: string): string => input.trim().replace(/^nostr:/i, "").trim()
-
-/**
- * Decode any NIP-19 entity that carries a pubkey (`npub1...`, `nprofile1...`, the optional
- * pubkey of an `nevent1...`, or the author pubkey of an `naddr1...`) into its `PublicKey`.
- * Returns `null` if the input is empty, unparseable, or a `note1...` (which carries an
- * event id, not a pubkey).
- *
- * Use this at any boundary where a user pastes a Nostr identifier and the rest of the
- * code expects a `PublicKey`. It's the general inverse of the per-entity encoders.
- */
-export const pubkeyFromNip19 = (input: string | null): PublicKey | null => {
-  if (!input) return null
-  const decoded = decodeNostrEntity(input)
-  if (!decoded || !("pubkey" in decoded) || !decoded.pubkey) return null
-  return decoded.pubkey
-}
+export const stripNostrUriPrefix = (input: string): string =>
+  trimSpaceAndNul(trimSpaceAndNul(input).replace(/^nostr:/i, ""))
 
 export type { DecodedEntity, DecodedNaddr, DecodedNevent, DecodedNote, DecodedNprofile, DecodedNpub }

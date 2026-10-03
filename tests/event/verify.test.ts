@@ -4,12 +4,12 @@ import { bytesToHex, hexToBytes } from "@noble/hashes/utils"
 import { computeEventId } from "../../src/domain/service/event-id.ts"
 import { verifyEventSignature } from "../../src/domain/service/verify.ts"
 import type { NostrEvent } from "../../src/domain/value-object/nostr-event.ts"
-import { parsePublicKey } from "../../src/domain/value-object/public-key.ts"
-import { parseSig } from "../../src/domain/value-object/sig.ts"
+import { publicKeyFixture, sigFixture } from "../../testing.ts"
+import { secretKeyOf } from "../support/keys.ts"
 
-const makeSignedEvent = async (overrides: Partial<NostrEvent> = {}): Promise<NostrEvent> => {
-  const sk = schnorr.utils.randomSecretKey()
-  const generatedPubkey = parsePublicKey(bytesToHex(schnorr.getPublicKey(sk)))
+const makeSignedEvent = (overrides: Partial<NostrEvent> = {}): NostrEvent => {
+  const sk = secretKeyOf(0x11)
+  const generatedPubkey = publicKeyFixture(bytesToHex(schnorr.getPublicKey(sk)))
   const base = {
     kind: 1,
     created_at: 1700000000,
@@ -18,53 +18,65 @@ const makeSignedEvent = async (overrides: Partial<NostrEvent> = {}): Promise<Nos
     ...overrides,
     pubkey: overrides.pubkey ?? generatedPubkey,
   }
-  const id = await computeEventId(base)
-  const sig = parseSig(bytesToHex(schnorr.sign(hexToBytes(id), sk)))
+  const id = computeEventId(base)
+  const sig = sigFixture(bytesToHex(schnorr.sign(hexToBytes(id), sk)))
   return { ...base, id, sig }
 }
 
-Deno.test("verifyEventSignature - true for a freshly signed event", async () => {
-  const event = await makeSignedEvent()
-  assertEquals(await verifyEventSignature(event), true)
+Deno.test("verifyEventSignature - true for a freshly signed event", () => {
+  const event = makeSignedEvent()
+  assertEquals(verifyEventSignature(event), true)
 })
 
-Deno.test("verifyEventSignature - false when content is tampered", async () => {
-  const event = await makeSignedEvent({ content: "original" })
+Deno.test("verifyEventSignature - false when content is tampered", () => {
+  const event = makeSignedEvent({ content: "original" })
   const tampered: NostrEvent = { ...event, content: "tampered" }
-  assertEquals(await verifyEventSignature(tampered), false)
+  assertEquals(verifyEventSignature(tampered), false)
 })
 
-Deno.test("verifyEventSignature - false when tags are tampered", async () => {
-  const event = await makeSignedEvent({ tags: [["t", "nostr"]] })
+Deno.test("verifyEventSignature - false when tags are tampered", () => {
+  const event = makeSignedEvent({ tags: [["t", "nostr"]] })
   const tampered: NostrEvent = { ...event, tags: [["t", "nostr"], ["t", "extra"]] }
-  assertEquals(await verifyEventSignature(tampered), false)
+  assertEquals(verifyEventSignature(tampered), false)
 })
 
-Deno.test("verifyEventSignature - false when created_at is tampered", async () => {
-  const event = await makeSignedEvent({ created_at: 1700000000 })
+Deno.test("verifyEventSignature - false when created_at is tampered", () => {
+  const event = makeSignedEvent({ created_at: 1700000000 })
   const tampered: NostrEvent = { ...event, created_at: 1700000001 }
-  assertEquals(await verifyEventSignature(tampered), false)
+  assertEquals(verifyEventSignature(tampered), false)
 })
 
-Deno.test("verifyEventSignature - false when sig is replaced with another valid-shaped sig", async () => {
-  const event = await makeSignedEvent()
-  const tampered: NostrEvent = { ...event, sig: parseSig("0".repeat(128)) }
-  assertEquals(await verifyEventSignature(tampered), false)
+Deno.test("verifyEventSignature - false when sig is replaced with another valid-shaped sig", () => {
+  const event = makeSignedEvent()
+  const tampered: NostrEvent = { ...event, sig: sigFixture("0".repeat(128)) }
+  assertEquals(verifyEventSignature(tampered), false)
 })
 
-Deno.test("verifyEventSignature - false when pubkey is replaced", async () => {
-  const event = await makeSignedEvent()
-  const otherSk = schnorr.utils.randomSecretKey()
-  const otherPubkey = parsePublicKey(bytesToHex(schnorr.getPublicKey(otherSk)))
+Deno.test("verifyEventSignature - false when pubkey is replaced", () => {
+  const event = makeSignedEvent()
+  const otherSk = secretKeyOf(0x22)
+  const otherPubkey = publicKeyFixture(bytesToHex(schnorr.getPublicKey(otherSk)))
   const tampered: NostrEvent = { ...event, pubkey: otherPubkey }
-  assertEquals(await verifyEventSignature(tampered), false)
+  assertEquals(verifyEventSignature(tampered), false)
 })
 
-Deno.test("verifyEventSignature - rejects two different events signed by the same key", async () => {
-  const sk = schnorr.utils.randomSecretKey()
-  const pubkey = parsePublicKey(bytesToHex(schnorr.getPublicKey(sk)))
-  const a = await makeSignedEvent({ pubkey, content: "first" })
-  const b = await makeSignedEvent({ pubkey, content: "second" })
+Deno.test("verifyEventSignature - rejects two different events signed by the same key", () => {
+  const sk = secretKeyOf(0x11)
+  const pubkey = publicKeyFixture(bytesToHex(schnorr.getPublicKey(sk)))
+  const a = makeSignedEvent({ pubkey, content: "first" })
+  const b = makeSignedEvent({ pubkey, content: "second" })
   const spliced: NostrEvent = { ...a, sig: b.sig }
-  assertEquals(await verifyEventSignature(spliced), false)
+  assertEquals(verifyEventSignature(spliced), false)
+})
+
+Deno.test("verifyEventSignature - false rather than a throw for a pubkey that is not a curve point", () => {
+  const event = makeSignedEvent()
+  const offCurve = publicKeyFixture("f".repeat(64))
+  const fields = { ...event, pubkey: offCurve }
+  assertEquals(verifyEventSignature({ ...fields, id: computeEventId(fields) }), false)
+})
+
+Deno.test("verifyEventSignature - false rather than a throw for a signature whose scalars are out of range", () => {
+  const event = makeSignedEvent()
+  assertEquals(verifyEventSignature({ ...event, sig: sigFixture("f".repeat(128)) }), false)
 })

@@ -1,0 +1,6 @@
+export type { GiftWrapUnwrapFailure } from "./gift-wrap-unwrap-failure.ts"
+export type { HttpRequestFailure, NetworkFailure, ServerFailure } from "./http-request-failure.ts"
+export type { JsonDecryptFailure } from "./json-decrypt-failure.ts"
+export type { JsonFetchFailure, NoAnswerFailure } from "./json-fetch-failure.ts"
+export type { MalformedBodyFailure } from "./malformed-body-failure.ts"
+export type { PrivateEntriesFailure } from "./private-entries-failure.ts"

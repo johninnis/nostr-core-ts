@@ -1,33 +1,46 @@
-import { assertEquals, assertInstanceOf } from "@std/assert"
+import { assertEquals } from "@std/assert"
 import type { HttpClient, HttpResponse } from "../../src/application/port/http.ts"
-import { NetworkError, ServerError } from "../../src/application/port/http.ts"
-import { Nip11FetchError } from "../../src/application/exception/nip11-fetch-error.ts"
-import { isRelayInformation } from "../../src/domain/value-object/nip11-info.ts"
+import { parseRelayInformation } from "../../src/domain/service/nip11-info.ts"
 import { wsToHttp } from "../../src/domain/value-object/relay-url.ts"
 import { failure, ok } from "../../src/domain/value-object/result.ts"
-import { DEFAULT_NIP11_TIMEOUT_MS, fetchRelayInformation } from "../../src/infrastructure/adapter/nip11-adapter.ts"
+import { DEFAULT_NIP11_TIMEOUT_MS, fetchRelayInformation } from "../../src/application/service/nip11-fetcher.ts"
+import { createHttpClient } from "../../src/infrastructure/http/fetch-http-client.ts"
+import type { PrivateAddressPolicy } from "../../src/infrastructure/http/fetch-http-client.ts"
+import { relayUrlFixture } from "../../testing.ts"
 
-Deno.test("wsToHttp - rewrites wss:// to https://", () => {
-  assertEquals(wsToHttp("wss://relay.example"), "https://relay.example")
+const RELAY = relayUrlFixture("wss://relay.example")
+
+Deno.test("wsToHttp - rewrites a wss:// relay to https://, as an HttpUrl with its root path", () => {
+  assertEquals<string>(wsToHttp(RELAY), "https://relay.example/")
 })
 
-Deno.test("wsToHttp - rewrites ws:// to http://", () => {
-  assertEquals(wsToHttp("ws://localhost:8080"), "http://localhost:8080")
+Deno.test("wsToHttp - rewrites a ws:// relay to http://, keeping its port and path", () => {
+  assertEquals<string>(wsToHttp(relayUrlFixture("ws://localhost:8080/nostr")), "http://localhost:8080/nostr")
 })
 
-Deno.test("wsToHttp - leaves non-ws URLs untouched", () => {
-  assertEquals(wsToHttp("https://relay.example"), "https://relay.example")
+Deno.test("fetchRelayInformation - requests the relay's own URI under the http(s) scheme (NIP-11)", async () => {
+  let requested: string | undefined
+  const httpClient: HttpClient = {
+    request: (input) => {
+      requested = input.url
+      return Promise.resolve(ok(stubResponse({})))
+    },
+  }
+  await fetchRelayInformation(httpClient, relayUrlFixture("wss://relay.example/nostr"))
+  assertEquals(requested, "https://relay.example/nostr")
 })
 
-const makeMockHttpClient = (response: HttpResponse | null): HttpClient => ({
-  request: async () => {
-    if (response === null) return failure(new NetworkError("no response"))
-    if (response.status >= 400) return failure(new ServerError(response.status, ""))
-    return ok(response)
+const stubHttpClient = (response: HttpResponse | null): HttpClient => ({
+  request: () => {
+    if (response === null) return Promise.resolve(failure({ type: "network", message: "no response" }))
+    if (response.status >= 400) {
+      return Promise.resolve(failure({ type: "server", status: response.status, message: "" }))
+    }
+    return Promise.resolve(ok(response))
   },
 })
 
-const makeMockResponse = (overrides: Partial<HttpResponse>): HttpResponse => ({
+const stubResponse = (overrides: Partial<HttpResponse>): HttpResponse => ({
   status: 200,
   headers: new Headers(),
   text: () => Promise.resolve(ok("")),
@@ -37,109 +50,202 @@ const makeMockResponse = (overrides: Partial<HttpResponse>): HttpResponse => ({
 })
 
 Deno.test("fetchRelayInformation - returns parsed info on 200", async () => {
-  const httpClient = makeMockHttpClient(makeMockResponse({
+  const httpClient = stubHttpClient(stubResponse({
     json: () => Promise.resolve(ok({ software: "hubstr-relay", version: "1.0" })),
   }))
-  const result = await fetchRelayInformation(httpClient, "https://relay.example")
+  const result = await fetchRelayInformation(httpClient, RELAY)
   assertEquals(result.success, true)
   if (!result.success) throw result.error
   assertEquals(result.value.software, "hubstr-relay")
   assertEquals(result.value.version, "1.0")
 })
 
-Deno.test("fetchRelayInformation - returns transport failure on non-200", async () => {
-  const httpClient = makeMockHttpClient(makeMockResponse({ status: 404 }))
-  const result = await fetchRelayInformation(httpClient, "https://relay.example")
-  assertEquals(result.success, false)
-  if (result.success) throw new Error("expected failure")
-  assertInstanceOf(result.error, Nip11FetchError)
-  assertEquals(result.error.tag, "transport")
+Deno.test("fetchRelayInformation - returns not-found when the relay answers 404", async () => {
+  const httpClient = stubHttpClient(stubResponse({ status: 404 }))
+  assertEquals(await fetchRelayInformation(httpClient, RELAY), failure({ type: "not-found" }))
 })
 
-Deno.test("fetchRelayInformation - returns transport failure on network error", async () => {
-  const httpClient = makeMockHttpClient(null)
-  const result = await fetchRelayInformation(httpClient, "https://relay.example")
-  assertEquals(result.success, false)
-  if (result.success) throw new Error("expected failure")
-  assertEquals(result.error.tag, "transport")
-  assertInstanceOf(result.error.cause, NetworkError)
+Deno.test("fetchRelayInformation - returns no-answer on a network error", async () => {
+  const httpClient = stubHttpClient(null)
+  assertEquals(
+    await fetchRelayInformation(httpClient, RELAY),
+    failure({ type: "no-answer", message: "no response" }),
+  )
 })
 
-Deno.test("fetchRelayInformation - returns body-read failure when JSON parse fails", async () => {
-  const httpClient = makeMockHttpClient(makeMockResponse({
-    json: () => Promise.resolve(failure(new NetworkError("invalid json"))),
+Deno.test("fetchRelayInformation - returns no-answer when JSON parse fails", async () => {
+  const httpClient = stubHttpClient(stubResponse({
+    json: () => Promise.resolve(failure({ type: "malformed-body", message: "invalid json" })),
   }))
-  const result = await fetchRelayInformation(httpClient, "https://relay.example")
-  assertEquals(result.success, false)
-  if (result.success) throw new Error("expected failure")
-  assertEquals(result.error.tag, "body-read")
-  assertInstanceOf(result.error.cause, NetworkError)
+  assertEquals(
+    await fetchRelayInformation(httpClient, RELAY),
+    failure({ type: "no-answer", message: "invalid json" }),
+  )
 })
 
-Deno.test("fetchRelayInformation - returns schema-mismatch failure carrying the offending body", async () => {
-  const httpClient = makeMockHttpClient(makeMockResponse({
+Deno.test("fetchRelayInformation - asks for the NIP-11 media type", async () => {
+  let accept: string | undefined
+  const httpClient: HttpClient = {
+    request: (input) => {
+      accept = input.headers?.["Accept"]
+      return Promise.resolve(ok(stubResponse({})))
+    },
+  }
+  await fetchRelayInformation(httpClient, RELAY)
+  assertEquals(accept, "application/nostr+json")
+})
+
+Deno.test("fetchRelayInformation - returns no-answer when the body is not a relay information document", async () => {
+  const httpClient = stubHttpClient(stubResponse({
     json: () => Promise.resolve(ok("not an object")),
   }))
-  const result = await fetchRelayInformation(httpClient, "https://relay.example")
+  const result = await fetchRelayInformation(httpClient, RELAY)
   assertEquals(result.success, false)
   if (result.success) throw new Error("expected failure")
-  assertEquals(result.error.tag, "schema-mismatch")
-  assertEquals(result.error.cause, { body: "not an object" })
+  assertEquals(result.error, { type: "no-answer", message: "response body is not a JSON object" })
 })
 
-Deno.test("isRelayInformation - true for an empty object (all fields optional)", () => {
-  assertEquals(isRelayInformation({}), true)
-})
+const PUBKEY_HEX = "a".repeat(64)
+const SELF_HEX = "b".repeat(64)
 
-Deno.test("isRelayInformation - true for a full document", () => {
-  const doc = {
-    name: "Relay",
-    description: "test",
+Deno.test("parseRelayInformation - reads the spec's snake_case fields into camelCase ones", () => {
+  const info = parseRelayInformation({
+    name: "Example",
+    description: "A relay",
+    pubkey: PUBKEY_HEX,
+    contact: "admin@example.com",
+    supported_nips: [1, 11, 42],
     software: "hubstr-relay",
     version: "1.0",
-    supported_nips: [1, 11, 42],
-  }
-  assertEquals(isRelayInformation(doc), true)
+    banner: "https://example.com/banner.png",
+    icon: "https://example.com/icon.png",
+    self: SELF_HEX,
+    terms_of_service: "https://example.com/terms.txt",
+  })
+  assertEquals(
+    {
+      name: info?.name,
+      description: info?.description,
+      pubkey: info?.pubkey,
+      contact: info?.contact,
+      supportedNips: info?.supportedNips,
+      software: info?.software,
+      version: info?.version,
+      banner: info?.banner,
+      icon: info?.icon,
+      self: info?.self,
+      termsOfService: info?.termsOfService,
+    },
+    {
+      name: "Example",
+      description: "A relay",
+      pubkey: PUBKEY_HEX,
+      contact: "admin@example.com",
+      supportedNips: [1, 11, 42],
+      software: "hubstr-relay",
+      version: "1.0",
+      banner: "https://example.com/banner.png",
+      icon: "https://example.com/icon.png",
+      self: SELF_HEX,
+      termsOfService: "https://example.com/terms.txt",
+    },
+  )
 })
 
-Deno.test("isRelayInformation - false for non-object inputs", () => {
-  assertEquals(isRelayInformation(null), false)
-  assertEquals(isRelayInformation("string"), false)
-  assertEquals(isRelayInformation([]), false)
+Deno.test("parseRelayInformation - reads every field as null from an empty document", () => {
+  const info = parseRelayInformation({})
+  assertEquals(
+    [info?.name, info?.pubkey, info?.self, info?.supportedNips, info?.software, info?.termsOfService, info?.limitation],
+    [null, null, null, null, null, null, null],
+  )
 })
 
-Deno.test("isRelayInformation - false when a string field has the wrong type", () => {
-  assertEquals(isRelayInformation({ name: 42 }), false)
+Deno.test("parseRelayInformation - reads a field of the wrong type as null and keeps the rest", () => {
+  const info = parseRelayInformation({ name: 42, software: "strfry" })
+  assertEquals([info?.name, info?.software], [null, "strfry"])
 })
 
-Deno.test("isRelayInformation - false when supported_nips contains a non-number", () => {
-  assertEquals(isRelayInformation({ supported_nips: [1, "two"] }), false)
+Deno.test("parseRelayInformation - reads supported_nips as null when it holds a non-number", () => {
+  assertEquals(parseRelayInformation({ supported_nips: [1, "two"] })?.supportedNips, null)
 })
 
-Deno.test("fetchRelayInformation - forwards options.timeoutMs and options.signal to the HttpClient request", async () => {
-  let capturedTimeout: number | undefined
-  let capturedSignal: AbortSignal | undefined
+Deno.test('parseRelayInformation - reads a self that is not a public key as null (NIP-11: it "MUST be a 32-byte hex public key")', () => {
+  assertEquals(parseRelayInformation({ self: "not-a-key" })?.self, null)
+})
+
+Deno.test("parseRelayInformation - reads a pubkey that is not a public key as null", () => {
+  assertEquals(parseRelayInformation({ pubkey: "not-a-key" })?.pubkey, null)
+})
+
+Deno.test("parseRelayInformation - reads supported_nips as null when it holds a number that is not an integer", () => {
+  assertEquals(parseRelayInformation({ supported_nips: [1, 11.5] })?.supportedNips, null)
+})
+
+Deno.test("parseRelayInformation - reads a limitation that is not a JSON object as null", () => {
+  assertEquals(
+    [[], "x", 1, null].map((limitation) => parseRelayInformation({ limitation })?.limitation),
+    [null, null, null, null],
+  )
+})
+
+Deno.test("parseRelayInformation - keeps the limitation object as the relay sent it", () => {
+  assertEquals(parseRelayInformation({ limitation: { auth_required: true } })?.limitation, { auth_required: true })
+})
+
+Deno.test("parseRelayInformation - keeps the whole document as the relay sent it", () => {
+  const document = { name: "Example", payments_url: "https://example.com/pay" }
+  assertEquals(parseRelayInformation(document)?.document, document)
+})
+
+Deno.test("parseRelayInformation - returns null for input that is not a JSON object", () => {
+  assertEquals([parseRelayInformation(null), parseRelayInformation("x"), parseRelayInformation([])], [null, null, null])
+})
+
+const capturedSignal = async (signal?: AbortSignal): Promise<AbortSignal | undefined> => {
+  let captured: AbortSignal | undefined
   const httpClient: HttpClient = {
     request: (input) => {
-      capturedTimeout = input.timeoutMs
-      capturedSignal = input.signal
-      return Promise.resolve(ok(makeMockResponse({})))
+      captured = input.signal
+      return Promise.resolve(ok(stubResponse({})))
     },
   }
+  await fetchRelayInformation(httpClient, RELAY, signal)
+  return captured
+}
+
+Deno.test("fetchRelayInformation - forwards the caller's signal to the HttpClient request", async () => {
   const controller = new AbortController()
-  await fetchRelayInformation(httpClient, "https://relay.example", { timeoutMs: 1234, signal: controller.signal })
-  assertEquals(capturedTimeout, 1234)
-  assertEquals(capturedSignal, controller.signal)
+  assertEquals(await capturedSignal(controller.signal), controller.signal)
 })
 
-Deno.test("fetchRelayInformation - uses DEFAULT_NIP11_TIMEOUT_MS when options.timeoutMs is omitted", async () => {
-  let captured: number | undefined
-  const httpClient: HttpClient = {
-    request: (input) => {
-      captured = input.timeoutMs
-      return Promise.resolve(ok(makeMockResponse({})))
-    },
+Deno.test("fetchRelayInformation - without a signal, the request is bounded by a deadline that has not yet elapsed", async () => {
+  const signal = await capturedSignal()
+  assertEquals([signal instanceof AbortSignal, signal?.aborted], [true, false])
+})
+
+const localRelayClient = (privateAddresses: PrivateAddressPolicy): { client: HttpClient; calls: () => number } => {
+  let calls = 0
+  return {
+    client: createHttpClient(privateAddresses, () => {
+      calls++
+      return Promise.resolve(new Response('{"software":"hubstr-relay"}'))
+    }),
+    calls: () => calls,
   }
-  await fetchRelayInformation(httpClient, "https://relay.example")
-  assertEquals(captured, DEFAULT_NIP11_TIMEOUT_MS)
+}
+
+Deno.test("fetchRelayInformation - a client that refuses private addresses does not reach a local relay", async () => {
+  const local = localRelayClient("refuse-private")
+  const result = await fetchRelayInformation(local.client, relayUrlFixture("ws://localhost:7777"))
+  assertEquals([result.success, local.calls()], [false, 0])
+})
+
+Deno.test("fetchRelayInformation - a client that allows private addresses reaches a local relay", async () => {
+  const local = localRelayClient("allow-private")
+  const result = await fetchRelayInformation(local.client, relayUrlFixture("ws://localhost:7777"))
+  assertEquals(result.success ? result.value.software : result.error, "hubstr-relay")
+})
+
+Deno.test("fetchRelayInformation - a lookup given no signal waits at most ten seconds", () => {
+  assertEquals(DEFAULT_NIP11_TIMEOUT_MS, 10_000)
 })

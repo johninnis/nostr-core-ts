@@ -3,14 +3,13 @@ import { encodeEventIdToNote, encodeNaddr, encodeNevent } from "../../src/domain
 import { eventOrAddressRefFromTag, parseEventOrAddressRef } from "../../src/domain/service/event-or-address-ref.ts"
 import type { EventOrAddressRef } from "../../src/domain/value-object/event-or-address-ref.ts"
 import { formatEventOrAddressRef } from "../../src/domain/value-object/event-or-address-ref.ts"
-import { parseEventId } from "../../src/domain/value-object/event-id.ts"
-import { KIND_LONGFORM } from "../../src/domain/value-object/kinds.ts"
-import { parsePublicKey } from "../../src/domain/value-object/public-key.ts"
+import { KIND_LONGFORM_CONTENT } from "../../src/domain/value-object/kinds.ts"
+import { eventIdFixture, publicKeyFixture } from "../../testing.ts"
 
-const PUBKEY = parsePublicKey("a".repeat(64))
-const EVENT_ID = parseEventId("c".repeat(64))
-const ADDRESS = { kind: KIND_LONGFORM, pubkey: PUBKEY, dTag: "my-article" }
-const COORD = `${KIND_LONGFORM}:${PUBKEY}:my-article`
+const PUBKEY = publicKeyFixture("a".repeat(64))
+const EVENT_ID = eventIdFixture("c".repeat(64))
+const ADDRESS = { kind: KIND_LONGFORM_CONTENT, pubkey: PUBKEY, dTag: "my-article" }
+const COORD = `${KIND_LONGFORM_CONTENT}:${PUBKEY}:my-article`
 const EVENT_REF: EventOrAddressRef = { type: "event", id: EVENT_ID }
 const ADDRESS_REF: EventOrAddressRef = { type: "address", address: ADDRESS }
 
@@ -32,6 +31,12 @@ Deno.test("parseEventOrAddressRef - accepts a hex event id", () => {
   assertEquals(parseEventOrAddressRef(EVENT_ID), EVENT_REF)
 })
 
+Deno.test("parseEventOrAddressRef - refuses a hex event id with anything around it", () => {
+  for (const value of [`\0${EVENT_ID}\t`, ` ${EVENT_ID} `, `\ufeff${EVENT_ID}`]) {
+    assertEquals(parseEventOrAddressRef(value), null)
+  }
+})
+
 Deno.test("parseEventOrAddressRef - accepts a kind:pubkey:d coordinate", () => {
   assertEquals(parseEventOrAddressRef(COORD), ADDRESS_REF)
 })
@@ -41,20 +46,36 @@ Deno.test("parseEventOrAddressRef - accepts a note1 entity", () => {
 })
 
 Deno.test("parseEventOrAddressRef - accepts an nevent1 entity", () => {
-  assertEquals(parseEventOrAddressRef(encodeNevent(EVENT_ID, { authorPubkey: PUBKEY })), EVENT_REF)
+  assertEquals(parseEventOrAddressRef(encodeNevent(EVENT_ID, { authorPubkey: PUBKEY }) ?? ""), EVENT_REF)
 })
 
 Deno.test("parseEventOrAddressRef - accepts an naddr1 entity", () => {
-  assertEquals(parseEventOrAddressRef(encodeNaddr(ADDRESS)), ADDRESS_REF)
+  assertEquals(parseEventOrAddressRef(encodeNaddr(ADDRESS) ?? ""), ADDRESS_REF)
 })
 
-Deno.test("parseEventOrAddressRef - rejects an address with an empty d tag", () => {
-  assertEquals(parseEventOrAddressRef(`${KIND_LONGFORM}:${PUBKEY}:`), null)
-  assertEquals(parseEventOrAddressRef(encodeNaddr({ ...ADDRESS, dTag: "" })), null)
+Deno.test("parseEventOrAddressRef - accepts an address with an empty d tag, as a coordinate or an naddr", () => {
+  const empty: EventOrAddressRef = { type: "address", address: { ...ADDRESS, dTag: "" } }
+  assertEquals(parseEventOrAddressRef(`${KIND_LONGFORM_CONTENT}:${PUBKEY}:`), empty)
+  assertEquals(parseEventOrAddressRef(encodeNaddr({ ...ADDRESS, dTag: "" }) ?? ""), empty)
+})
+
+Deno.test("parseEventOrAddressRef - rejects an upper-case hex event id", () => {
+  assertEquals(parseEventOrAddressRef("C".repeat(64)), null)
+})
+
+Deno.test("parseEventOrAddressRef - refuses an entity with a nostr: prefix or space around it", () => {
+  const note = encodeEventIdToNote(EVENT_ID)
+  for (const value of [`nostr:${note}`, `NOSTR:${note}`, ` ${note} `]) {
+    assertEquals(parseEventOrAddressRef(value), null)
+  }
+})
+
+Deno.test("parseEventOrAddressRef - reads a coordinate exactly as written, space included", () => {
+  assertEquals(parseEventOrAddressRef(` ${COORD}`), null)
 })
 
 Deno.test("parseEventOrAddressRef - rejects values that are neither an event nor an address", () => {
-  for (const value of ["", "not-a-ref", "C".repeat(64), "c".repeat(63), `x:${PUBKEY}:d`]) {
+  for (const value of ["", "not-a-ref", "c".repeat(63), `x:${PUBKEY}:d`]) {
     assertEquals(parseEventOrAddressRef(value), null)
   }
 })
@@ -73,11 +94,17 @@ Deno.test("eventOrAddressRefFromTag - reads an address ref from a and A tags", (
   assertEquals(eventOrAddressRefFromTag(["A", COORD]), ADDRESS_REF)
 })
 
+Deno.test("eventOrAddressRefFromTag - reads an address with an empty d tag", () => {
+  assertEquals(eventOrAddressRefFromTag(["a", `${KIND_LONGFORM_CONTENT}:${PUBKEY}:`]), {
+    type: "address",
+    address: { ...ADDRESS, dTag: "" },
+  })
+})
+
 Deno.test("eventOrAddressRefFromTag - rejects malformed values, the wrong form for the tag, and other tags", () => {
   assertEquals(eventOrAddressRefFromTag(["e", "not-an-id"]), null)
   assertEquals(eventOrAddressRefFromTag(["e", COORD]), null)
   assertEquals(eventOrAddressRefFromTag(["a", EVENT_ID]), null)
-  assertEquals(eventOrAddressRefFromTag(["a", `${KIND_LONGFORM}:${PUBKEY}:`]), null)
   assertEquals(eventOrAddressRefFromTag(["p", PUBKEY]), null)
   assertEquals(eventOrAddressRefFromTag(["e"]), null)
 })

@@ -1,5 +1,6 @@
 import { assertEquals, assertNotEquals } from "@std/assert"
 import { randomBytes, randomUint32 } from "../../src/domain/service/random.ts"
+import { sourceFilesMatching } from "../support/source-files.ts"
 
 Deno.test("randomBytes - returns a Uint8Array of the requested length", () => {
   const bytes = randomBytes(32)
@@ -27,4 +28,8 @@ Deno.test("randomUint32 - independent calls produce different output (statistica
   const values = new Set<number>()
   for (let i = 0; i < 8; i++) values.add(randomUint32())
   assertEquals(values.size > 1, true)
+})
+
+Deno.test("randomBytes - is noble's, the one source the vendored NIP-44 codec also draws from (ADR-0007, ADR-0016)", async () => {
+  assertEquals(await sourceFilesMatching(/getRandomValues\(/), [])
 })

@@ -1,57 +1,56 @@
 import { assertEquals } from "@std/assert"
 import {
-  KIND_APP_SETTINGS,
+  isRepostKind,
+  isValidKind,
+  KIND_APPLICATION_SPECIFIC_DATA,
+  KIND_AUTHORED_PODCASTS_LIST,
   KIND_COMMENT,
-  KIND_CONTACT_LIST,
-  KIND_CURATED_SET,
-  KIND_DELETION,
   KIND_DM_RELAY_LIST,
+  KIND_EPHEMERAL_GIFT_WRAP,
+  KIND_EVENT_DELETION,
+  KIND_FAVOURITE_FOLLOW_SETS_LIST,
+  KIND_FAVOURITE_PODCASTS_LIST,
+  KIND_FOLLOW_LIST,
+  KIND_FOLLOW_SET,
   KIND_GENERIC_REPOST,
   KIND_GIFT_WRAP,
   KIND_HIGHLIGHT,
   KIND_LIVE_EVENT,
-  KIND_LONGFORM,
-  KIND_LONGFORM_DRAFT,
+  KIND_LONGFORM_CONTENT,
+  KIND_LONGFORM_CONTENT_DRAFT,
   KIND_METADATA,
   KIND_MUTE_LIST,
   KIND_NUTZAP,
-  KIND_PEOPLE_SET,
   KIND_REACTION,
   KIND_RELAY_LIST,
   KIND_REPOST,
-  KIND_SHORT_NOTE,
-  KIND_VIDEO_HORIZONTAL,
-  KIND_VIDEO_VERTICAL,
+  KIND_SHORT_FORM_VIDEO_ADDRESSABLE,
+  KIND_TEXT_NOTE,
+  KIND_VIDEO_ADDRESSABLE,
   KIND_ZAP_RECEIPT,
   KIND_ZAP_REQUEST,
-} from "../../src/domain/value-object/kinds.ts"
-import {
-  isAnyReplaceable,
-  isParameterisedReplaceable,
-  isReplaceable,
-  isRepostKind,
+  kindCategory,
   REPOST_KINDS,
-} from "../../src/domain/service/kinds.ts"
-import { replaceableStorageKey, replaceableSupersedes } from "../../src/domain/service/replaceable.ts"
-import { parsePublicKey } from "../../src/domain/value-object/public-key.ts"
-import { parseEventId } from "../../src/domain/value-object/event-id.ts"
+} from "../../src/domain/value-object/kinds.ts"
+import { getDTag, replaceableStorageKey, replaceableSupersedes } from "../../src/domain/service/replaceable.ts"
+import { eventIdFixture, publicKeyFixture } from "../../testing.ts"
 
-const PK = parsePublicKey("a".repeat(64))
+const PK = publicKeyFixture("a".repeat(64))
 
 Deno.test("KIND_METADATA - equals 0", () => {
   assertEquals(KIND_METADATA, 0)
 })
 
-Deno.test("KIND_SHORT_NOTE - equals 1", () => {
-  assertEquals(KIND_SHORT_NOTE, 1)
+Deno.test("KIND_TEXT_NOTE - equals 1", () => {
+  assertEquals(KIND_TEXT_NOTE, 1)
 })
 
-Deno.test("KIND_CONTACT_LIST - equals 3", () => {
-  assertEquals(KIND_CONTACT_LIST, 3)
+Deno.test("KIND_FOLLOW_LIST - equals 3", () => {
+  assertEquals(KIND_FOLLOW_LIST, 3)
 })
 
-Deno.test("KIND_DELETION - equals 5", () => {
-  assertEquals(KIND_DELETION, 5)
+Deno.test("KIND_EVENT_DELETION - equals 5", () => {
+  assertEquals(KIND_EVENT_DELETION, 5)
 })
 
 Deno.test("KIND_REPOST - equals 6", () => {
@@ -70,40 +69,52 @@ Deno.test("KIND_GIFT_WRAP - equals 1059", () => {
   assertEquals(KIND_GIFT_WRAP, 1059)
 })
 
-Deno.test("KIND_COMMENT - equals 1111", () => {
-  assertEquals(KIND_COMMENT, 1111)
+Deno.test("KIND_EPHEMERAL_GIFT_WRAP - equals 21059", () => {
+  assertEquals(KIND_EPHEMERAL_GIFT_WRAP, 21059)
 })
 
-Deno.test("KIND_CURATED_SET - equals 1068", () => {
-  assertEquals(KIND_CURATED_SET, 1068)
+Deno.test("KIND_COMMENT - equals 1111", () => {
+  assertEquals(KIND_COMMENT, 1111)
 })
 
 Deno.test("KIND_MUTE_LIST - equals 10000", () => {
   assertEquals(KIND_MUTE_LIST, 10000)
 })
 
+Deno.test("KIND_FAVOURITE_FOLLOW_SETS_LIST - equals 10021, the NIP-51 favourite follow sets list", () => {
+  assertEquals(KIND_FAVOURITE_FOLLOW_SETS_LIST, 10021)
+})
+
+Deno.test("KIND_FAVOURITE_PODCASTS_LIST - equals 10054, the NIP-51 favourite podcasts list", () => {
+  assertEquals(KIND_FAVOURITE_PODCASTS_LIST, 10054)
+})
+
+Deno.test("KIND_AUTHORED_PODCASTS_LIST - equals 10064, the NIP-51 authored podcasts list", () => {
+  assertEquals(KIND_AUTHORED_PODCASTS_LIST, 10064)
+})
+
 Deno.test("KIND_RELAY_LIST - equals 10002", () => {
   assertEquals(KIND_RELAY_LIST, 10002)
 })
 
-Deno.test("KIND_APP_SETTINGS - equals 30078", () => {
-  assertEquals(KIND_APP_SETTINGS, 30078)
+Deno.test("KIND_APPLICATION_SPECIFIC_DATA - equals 30078", () => {
+  assertEquals(KIND_APPLICATION_SPECIFIC_DATA, 30078)
 })
 
 Deno.test("KIND_DM_RELAY_LIST - equals 10050", () => {
   assertEquals(KIND_DM_RELAY_LIST, 10050)
 })
 
-Deno.test("KIND_PEOPLE_SET - equals 30000", () => {
-  assertEquals(KIND_PEOPLE_SET, 30000)
+Deno.test("KIND_FOLLOW_SET - equals 30000", () => {
+  assertEquals(KIND_FOLLOW_SET, 30000)
 })
 
-Deno.test("KIND_LONGFORM - equals 30023", () => {
-  assertEquals(KIND_LONGFORM, 30023)
+Deno.test("KIND_LONGFORM_CONTENT - equals 30023", () => {
+  assertEquals(KIND_LONGFORM_CONTENT, 30023)
 })
 
-Deno.test("KIND_LONGFORM_DRAFT - equals 30024", () => {
-  assertEquals(KIND_LONGFORM_DRAFT, 30024)
+Deno.test("KIND_LONGFORM_CONTENT_DRAFT - equals 30024", () => {
+  assertEquals(KIND_LONGFORM_CONTENT_DRAFT, 30024)
 })
 
 Deno.test("KIND_ZAP_RECEIPT - equals 9735", () => {
@@ -126,72 +137,45 @@ Deno.test("KIND_LIVE_EVENT - equals 30311", () => {
   assertEquals(KIND_LIVE_EVENT, 30311)
 })
 
-Deno.test("KIND_VIDEO_HORIZONTAL - equals 34235", () => {
-  assertEquals(KIND_VIDEO_HORIZONTAL, 34235)
+Deno.test("KIND_VIDEO_ADDRESSABLE - equals 34235", () => {
+  assertEquals(KIND_VIDEO_ADDRESSABLE, 34235)
 })
 
-Deno.test("KIND_VIDEO_VERTICAL - equals 34236", () => {
-  assertEquals(KIND_VIDEO_VERTICAL, 34236)
+Deno.test("KIND_SHORT_FORM_VIDEO_ADDRESSABLE - equals 34236", () => {
+  assertEquals(KIND_SHORT_FORM_VIDEO_ADDRESSABLE, 34236)
 })
 
-Deno.test("isReplaceable - returns true for KIND_METADATA", () => {
-  assertEquals(isReplaceable(KIND_METADATA), true)
+Deno.test("kindCategory - kinds 0 and 3 and the 10000 range are replaceable (NIP-01)", () => {
+  assertEquals([KIND_METADATA, KIND_FOLLOW_LIST, 10000, 15000, 19999].map(kindCategory), [
+    "replaceable",
+    "replaceable",
+    "replaceable",
+    "replaceable",
+    "replaceable",
+  ])
 })
 
-Deno.test("isReplaceable - returns true for KIND_CONTACT_LIST", () => {
-  assertEquals(isReplaceable(KIND_CONTACT_LIST), true)
+Deno.test("kindCategory - the 20000 range is ephemeral (NIP-01)", () => {
+  assertEquals([20000, 22242, 29999].map(kindCategory), ["ephemeral", "ephemeral", "ephemeral"])
 })
 
-Deno.test("isReplaceable - returns true for kind 10000", () => {
-  assertEquals(isReplaceable(10000), true)
+Deno.test("kindCategory - the 30000 range is addressable (NIP-01)", () => {
+  assertEquals([30000, KIND_LONGFORM_CONTENT, 39999].map(kindCategory), ["addressable", "addressable", "addressable"])
 })
 
-Deno.test("isReplaceable - returns true for kind 19999", () => {
-  assertEquals(isReplaceable(19999), true)
+Deno.test("kindCategory - NIP-01's regular bands are regular", () => {
+  assertEquals([1, 2, 4, 44, 1000, 9999].map(kindCategory), [
+    "regular",
+    "regular",
+    "regular",
+    "regular",
+    "regular",
+    "regular",
+  ])
 })
 
-Deno.test("isReplaceable - returns true for kind 15000 (mid-range)", () => {
-  assertEquals(isReplaceable(15000), true)
-})
-
-Deno.test("isReplaceable - returns false for KIND_SHORT_NOTE", () => {
-  assertEquals(isReplaceable(KIND_SHORT_NOTE), false)
-})
-
-Deno.test("isReplaceable - returns false for kind 9999", () => {
-  assertEquals(isReplaceable(9999), false)
-})
-
-Deno.test("isReplaceable - returns false for kind 20000", () => {
-  assertEquals(isReplaceable(20000), false)
-})
-
-Deno.test("isReplaceable - returns false for parameterised replaceable kinds", () => {
-  assertEquals(isReplaceable(30000), false)
-})
-
-Deno.test("isParameterisedReplaceable - returns true for kind 30000", () => {
-  assertEquals(isParameterisedReplaceable(30000), true)
-})
-
-Deno.test("isParameterisedReplaceable - returns true for kind 39999", () => {
-  assertEquals(isParameterisedReplaceable(39999), true)
-})
-
-Deno.test("isParameterisedReplaceable - returns true for KIND_LONGFORM", () => {
-  assertEquals(isParameterisedReplaceable(KIND_LONGFORM), true)
-})
-
-Deno.test("isParameterisedReplaceable - returns false for kind 29999", () => {
-  assertEquals(isParameterisedReplaceable(29999), false)
-})
-
-Deno.test("isParameterisedReplaceable - returns false for kind 40000", () => {
-  assertEquals(isParameterisedReplaceable(40000), false)
-})
-
-Deno.test("isParameterisedReplaceable - returns false for KIND_SHORT_NOTE", () => {
-  assertEquals(isParameterisedReplaceable(KIND_SHORT_NOTE), false)
+Deno.test("kindCategory - kinds outside every NIP-01 band default to regular", () => {
+  assertEquals([45, 443, 999, 40000, 65535].map(kindCategory), ["regular", "regular", "regular", "regular", "regular"])
 })
 
 Deno.test("REPOST_KINDS - contains repost and generic repost", () => {
@@ -209,7 +193,7 @@ Deno.test("isRepostKind - true for KIND_GENERIC_REPOST", () => {
 })
 
 Deno.test("isRepostKind - false for unrelated kinds", () => {
-  assertEquals(isRepostKind(KIND_SHORT_NOTE), false)
+  assertEquals(isRepostKind(KIND_TEXT_NOTE), false)
   assertEquals(isRepostKind(KIND_REACTION), false)
 })
 
@@ -225,7 +209,7 @@ Deno.test("replaceableStorageKey - returns pubkey:kind for replaceable kind 0", 
 })
 
 Deno.test("replaceableStorageKey - returns pubkey:kind for replaceable kind 3", () => {
-  const event = makeEvent(KIND_CONTACT_LIST, PK)
+  const event = makeEvent(KIND_FOLLOW_LIST, PK)
   assertEquals(replaceableStorageKey(event), `${PK}:3`)
 })
 
@@ -234,18 +218,23 @@ Deno.test("replaceableStorageKey - returns pubkey:kind for replaceable range kin
   assertEquals(replaceableStorageKey(event), `${PK}:10002`)
 })
 
-Deno.test("replaceableStorageKey - returns pubkey:kind:dTag for parameterised replaceable", () => {
-  const event = makeEvent(KIND_PEOPLE_SET, PK, [["d", "my-list"]])
+Deno.test("replaceableStorageKey - returns pubkey:kind:dTag for an addressable event", () => {
+  const event = makeEvent(KIND_FOLLOW_SET, PK, [["d", "my-list"]])
   assertEquals(replaceableStorageKey(event), `${PK}:30000:my-list`)
 })
 
 Deno.test("replaceableStorageKey - defaults dTag to empty string when missing", () => {
-  const event = makeEvent(KIND_LONGFORM, PK)
+  const event = makeEvent(KIND_LONGFORM_CONTENT, PK)
   assertEquals(replaceableStorageKey(event), `${PK}:30023:`)
 })
 
+Deno.test("replaceableStorageKey - returns null for an addressable event whose d tags disagree (shared ADR-0014)", () => {
+  const event = makeEvent(KIND_LONGFORM_CONTENT, PK, [["d", "a"], ["d", "b"]])
+  assertEquals(replaceableStorageKey(event), null)
+})
+
 Deno.test("replaceableStorageKey - returns null for regular events", () => {
-  const event = makeEvent(KIND_SHORT_NOTE, PK)
+  const event = makeEvent(KIND_TEXT_NOTE, PK)
   assertEquals(replaceableStorageKey(event), null)
 })
 
@@ -254,8 +243,8 @@ Deno.test("replaceableStorageKey - returns null for kind outside replaceable ran
   assertEquals(replaceableStorageKey(event), null)
 })
 
-const LOW_ID = parseEventId("11".padEnd(64, "0"))
-const HIGH_ID = parseEventId("22".padEnd(64, "0"))
+const LOW_ID = eventIdFixture("11".padEnd(64, "0"))
+const HIGH_ID = eventIdFixture("22".padEnd(64, "0"))
 
 Deno.test("replaceableSupersedes - a strictly newer candidate supersedes", () => {
   assertEquals(replaceableSupersedes({ id: HIGH_ID, created_at: 2000 }, { id: LOW_ID, created_at: 1000 }), true)
@@ -274,10 +263,26 @@ Deno.test("replaceableSupersedes - an identical event does not supersede itself"
   assertEquals(replaceableSupersedes({ id: LOW_ID, created_at: 1000 }, { id: LOW_ID, created_at: 1000 }), false)
 })
 
-Deno.test("isAnyReplaceable - true for kind 0, a 10000-range kind and a 30000-range kind", () => {
-  assertEquals([0, 10002, 30023].map(isAnyReplaceable), [true, true, true])
+Deno.test("getDTag - returns the d tag value", () => {
+  assertEquals(getDTag([["d", "settings"]]), "settings")
 })
 
-Deno.test("isAnyReplaceable - false for a regular kind", () => {
-  assertEquals(isAnyReplaceable(1), false)
+Deno.test("getDTag - returns the empty string when there is no d tag", () => {
+  assertEquals(getDTag([["p", "x"]]), "")
+})
+
+Deno.test("getDTag - reads a repeated identical d tag as one identifier (shared ADR-0014)", () => {
+  assertEquals(getDTag([["d", "x"], ["d", "x"]]), "x")
+})
+
+Deno.test("getDTag - returns null when d tags disagree, since the event names no one identifier (shared ADR-0014)", () => {
+  assertEquals(getDTag([["d", "x"], ["d", "y"]]), null)
+})
+
+Deno.test("isValidKind - accepts NIP-01's 0 and 65535", () => {
+  assertEquals([0, 65535].map(isValidKind), [true, true])
+})
+
+Deno.test("isValidKind - refuses a kind above 65535, a negative, a fraction and a non-number", () => {
+  assertEquals([65536, -1, 1.5, "1", null].map(isValidKind), [false, false, false, false, false])
 })

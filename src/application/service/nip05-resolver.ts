@@ -1,64 +1,48 @@
 import type { HttpClient } from "../port/http.ts"
-import { isRecord } from "../../domain/value-object/guards.ts"
+import type { NoAnswerFailure } from "../failure/json-fetch-failure.ts"
+import { readJsonDocument } from "./json-document.ts"
+import { isRecord } from "../../domain/service/guards.ts"
+import { splitInternetIdentifier } from "../../domain/value-object/internet-identifier.ts"
 import type { Nip05Id } from "../../domain/value-object/nip05-id.ts"
 import type { PublicKey } from "../../domain/value-object/public-key.ts"
-import { isValidPublicKey } from "../../domain/value-object/public-key.ts"
-
-/** Lookup defaults to 10 s — well-known endpoints that take longer are almost always stalled. */
-export const DEFAULT_NIP05_TIMEOUT_MS = 10_000
-
-/** Options accepted by `resolveNip05` — lookup timeout and an optional `AbortSignal`. */
-export interface ResolveNip05Options {
-  /** Hard ceiling on the lookup, in milliseconds. Defaults to {@link DEFAULT_NIP05_TIMEOUT_MS}. */
-  readonly timeoutMs?: number
-  /** Caller-supplied abort signal. Composes with `timeoutMs` — whichever fires first wins. */
-  readonly signal?: AbortSignal
-}
+import { parsePublicKey } from "../../domain/value-object/public-key.ts"
+import type { Result } from "../../domain/value-object/result.ts"
+import { failure, ok } from "../../domain/value-object/result.ts"
 
 /**
- * Resolve a NIP-05 identifier to a `PublicKey` by fetching `/.well-known/nostr.json`; returns
- * `null` on any failure (transport, timeout, abort, missing name, malformed pubkey).
- *
- * Per NIP-05 the local-part lookup is case-insensitive: the resolver matches `names` keys against
- * the lowercased local-part rather than indexing the object directly, so a server with
- * case-preserved keys (`{"names": {"Alice": "..."}}`) still resolves a lowercased `Nip05Id`.
+ * The deadline on a lookup given no signal, 10 s — well-known endpoints that take longer are almost always stalled.
+ */
+export const DEFAULT_NIP05_TIMEOUT_MS = 10_000
+
+const pubkeyForName = (document: Readonly<Record<string, unknown>>, name: string): PublicKey | null => {
+  if (!isRecord(document.names)) return null
+  return Object.hasOwn(document.names, name) ? parsePublicKey(document.names[name]) : null
+}
+
+// Deliberate: ok(null) is the domain's answer, failure means no answer — see ADR-0015
+/**
+ * Resolve a NIP-05 identifier to a `PublicKey` by fetching `/.well-known/nostr.json`. `ok(pubkey)` when the server maps
+ * the name; `ok(null)` when it answers but does not (no document — a 404 — no such name, or no valid pubkey);
+ * `failure(NoAnswerFailure)` when there is no answer to judge (transport failure, timeout, abort, any other error
+ * status, a redirect — which NIP-05 says fetchers "MUST ignore" — or a body that is not a JSON object). The name is
+ * matched exactly: NIP-05's local-part "MUST only use characters `a-z0-9-_.`", so a document key that differs in case
+ * is not that name. `signal` aborts the lookup; given none, it is bounded by {@link DEFAULT_NIP05_TIMEOUT_MS}, and a
+ * caller that passes its own signal and wants a deadline too combines them with `AbortSignal.any`.
  */
 export const resolveNip05 = async (
-  identifier: Nip05Id,
   httpClient: HttpClient,
-  options: ResolveNip05Options = {},
-): Promise<PublicKey | null> => {
-  const atIndex = identifier.indexOf("@")
-  const name = identifier.slice(0, atIndex)
-  const domain = identifier.slice(atIndex + 1)
+  identifier: Nip05Id,
+  signal: AbortSignal = AbortSignal.timeout(DEFAULT_NIP05_TIMEOUT_MS),
+): Promise<Result<PublicKey | null, NoAnswerFailure>> => {
+  const { name, domain } = splitInternetIdentifier(identifier)
 
-  const url = `https://${domain}/.well-known/nostr.json?name=${encodeURIComponent(name)}`
-
-  const result = await httpClient.request({
-    url,
-    method: "GET",
-    timeoutMs: options.timeoutMs ?? DEFAULT_NIP05_TIMEOUT_MS,
-    signal: options.signal,
-  })
-  if (!result.success) return null
-
-  const body = await result.value.json()
-  if (!body.success || !isRecord(body.value)) return null
-
-  const names = body.value.names
-  if (!isRecord(names)) return null
-
-  // NIP-05 local-parts are case-insensitive. The `name` slice comes from a `Nip05Id`, which
-  // `parseNip05Id` already lowercases — so we only need to lowercase the server-supplied keys.
-  let raw: unknown
-  for (const [key, value] of Object.entries(names)) {
-    if (key.toLowerCase() === name) {
-      raw = value
-      break
-    }
-  }
-  if (typeof raw !== "string") return null
-
-  const lower = raw.toLowerCase()
-  return isValidPublicKey(lower) ? lower : null
+  const document = await readJsonDocument(
+    await httpClient.request({
+      url: `https://${domain}/.well-known/nostr.json?name=${encodeURIComponent(name)}`,
+      method: "GET",
+      signal,
+    }),
+  )
+  if (document.success) return ok(pubkeyForName(document.value, name))
+  return document.error.type === "not-found" ? ok(null) : failure(document.error)
 }

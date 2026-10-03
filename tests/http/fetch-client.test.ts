@@ -1,6 +1,6 @@
-import { assertEquals } from "@std/assert"
-import { createHttpClient } from "../../src/infrastructure/adapter/fetch-http-client-adapter.ts"
-import { NetworkError, ServerError } from "../../src/application/port/http.ts"
+import { assertEquals, assertRejects } from "@std/assert"
+import { createHttpClient } from "../../src/infrastructure/http/fetch-http-client.ts"
+import { failure } from "../../src/domain/value-object/result.ts"
 
 const withFetchStub = async (
   stub: typeof globalThis.fetch,
@@ -31,21 +31,34 @@ Deno.test("createHttpClient - returns ok HttpResponse for 2xx", async () => {
   )
 })
 
-Deno.test("createHttpClient - body.json() returns a NetworkError Result when the body isn't JSON", async () => {
+Deno.test("createHttpClient - body.json() returns a malformed-body failure, not a network one, when the body isn't JSON", async () => {
   await withFetchStub(
     () => Promise.resolve(new Response("not json", { status: 200 })),
     async () => {
       const client = createHttpClient()
       const result = await client.request({ url: "https://example.com", method: "GET" })
       if (!result.success) throw new Error("expected request success")
-      const body = await result.value.json()
-      assertEquals(body.success, false)
-      if (!body.success) assertEquals(body.error.tag, "NetworkError")
+      assertEquals(await result.value.json(), failure({ type: "malformed-body", message: "response body is not JSON" }))
     },
   )
 })
 
-Deno.test("createHttpClient - returns ServerError for status >= 400", async () => {
+Deno.test("createHttpClient - body.json() refuses a body that is not UTF-8 as malformed, never reading it lossily", async () => {
+  const notUtf8 = new Uint8Array([0x7b, 0x22, 0x61, 0x22, 0x3a, 0x22, 0xff, 0x22, 0x7d])
+  const client = createHttpClient("refuse-private", () => Promise.resolve(new Response(notUtf8, { status: 200 })))
+  const result = await client.request({ url: "https://example.com", method: "GET" })
+  if (!result.success) throw new Error("expected request success")
+  assertEquals(await result.value.json(), failure({ type: "malformed-body", message: "response body is not UTF-8" }))
+})
+
+Deno.test("createHttpClient - body.json() reads a UTF-8 body's multi-byte characters as written", async () => {
+  const client = createHttpClient("refuse-private", () => Promise.resolve(new Response('{"a":"é€"}', { status: 200 })))
+  const result = await client.request({ url: "https://example.com", method: "GET" })
+  if (!result.success) throw new Error("expected request success")
+  assertEquals(await result.value.json(), { success: true, value: { a: "é€" } })
+})
+
+Deno.test("createHttpClient - returns a ServerFailure for status >= 400", async () => {
   await withFetchStub(
     () => Promise.resolve(new Response("nope", { status: 503 })),
     async () => {
@@ -53,35 +66,35 @@ Deno.test("createHttpClient - returns ServerError for status >= 400", async () =
       const result = await client.request({ url: "https://example.com", method: "GET" })
       assertEquals(result.success, false)
       if (result.success) throw new Error("expected failure")
-      assertEquals(result.error.tag, "ServerError")
-      if (result.error.tag !== "ServerError") return
+      assertEquals(result.error.type, "server")
+      if (result.error.type !== "server") return
       assertEquals(result.error.status, 503)
       assertEquals(result.error.message, "nope")
     },
   )
 })
 
-Deno.test("createHttpClient - prefers x-reason header over response text on ServerError", async () => {
+Deno.test("createHttpClient - prefers x-reason header over response text on a ServerFailure", async () => {
   await withFetchStub(
     () => Promise.resolve(new Response("body text ignored", { status: 400, headers: { "x-reason": "bad input" } })),
     async () => {
       const client = createHttpClient()
       const result = await client.request({ url: "https://example.com", method: "GET" })
       assertEquals(result.success, false)
-      if (result.success || result.error.tag !== "ServerError") throw new Error("expected ServerError")
+      if (result.success || result.error.type !== "server") throw new Error("expected a server failure")
       assertEquals(result.error.message, "bad input")
     },
   )
 })
 
-Deno.test("createHttpClient - returns NetworkError when fetch throws", async () => {
+Deno.test("createHttpClient - returns a NetworkFailure when fetch throws", async () => {
   await withFetchStub(
     () => Promise.reject(new TypeError("Failed to fetch")),
     async () => {
       const client = createHttpClient()
       const result = await client.request({ url: "https://example.com", method: "GET" })
       assertEquals(result.success, false)
-      if (result.success || result.error.tag !== "NetworkError") throw new Error("expected NetworkError")
+      if (result.success || result.error.type !== "network") throw new Error("expected a network failure")
       assertEquals(result.error.message, "Failed to fetch")
     },
   )
@@ -139,15 +152,6 @@ Deno.test("createHttpClient - body.blob() returns Ok(Blob) on 2xx", async () => 
   )
 })
 
-Deno.test("createHttpClient - returned error types are construct-compatible with NetworkError / ServerError classes", () => {
-  // smoke check the classes are still constructible from outside (consumer test mocks need this)
-  const _net: NetworkError = new NetworkError("test")
-  const _srv: ServerError = new ServerError(500, "test")
-})
-
-// A test stub that never resolves on its own — it only rejects when the request's abort signal
-// fires. The signal lives on init.signal at runtime even though Deno's `RequestInit` type omits
-// it from its public surface; we narrow via `in` to get at it without a type assertion.
 const extractSignal = (init: unknown): AbortSignal | null => {
   if (!init || typeof init !== "object" || !("signal" in init)) return null
   const sig = init.signal
@@ -176,17 +180,28 @@ Deno.test("createHttpClient - forwards a caller-supplied signal to fetch and abo
     controller.abort(new DOMException("caller cancelled", "AbortError"))
     const result = await pending
     assertEquals(result.success, false)
-    if (result.success || result.error.tag !== "NetworkError") throw new Error("expected NetworkError")
+    if (result.success || result.error.type !== "network") throw new Error("expected a network failure")
   })
 })
 
-Deno.test("createHttpClient - timeoutMs aborts the fetch when the deadline elapses", async () => {
-  await withFetchStub(fetchThatAbortsOnSignal, async () => {
-    const client = createHttpClient()
-    const result = await client.request({ url: "https://example.com", method: "GET", timeoutMs: 10 })
-    assertEquals(result.success, false)
-    if (result.success || result.error.tag !== "NetworkError") throw new Error("expected NetworkError")
+Deno.test("createHttpClient - a caller abort carrying a reason of its own is a NetworkFailure", async () => {
+  const controller = new AbortController()
+  const pending = createHttpClient("refuse-private", fetchThatAbortsOnSignal).request({
+    url: "https://example.com",
+    method: "GET",
+    signal: controller.signal,
   })
+  controller.abort(new Error("caller's own reason"))
+  assertEquals(await pending, failure({ type: "network", message: "caller's own reason" }))
+})
+
+Deno.test("createHttpClient - a fetch that throws anything but a transport failure is a fault that propagates", async () => {
+  const client = createHttpClient("refuse-private", () => Promise.reject(new RangeError("a bug in the fetch")))
+  await assertRejects(
+    () => client.request({ url: "https://example.com", method: "GET" }),
+    RangeError,
+    "a bug in the fetch",
+  )
 })
 
 Deno.test("createHttpClient - caps the error-body read at 8 KiB and uses x-reason in preference", async () => {
@@ -196,24 +211,20 @@ Deno.test("createHttpClient - caps the error-body read at 8 KiB and uses x-reaso
     async () => {
       const client = createHttpClient()
       const result = await client.request({ url: "https://example.com", method: "GET" })
-      if (result.success || result.error.tag !== "ServerError") throw new Error("expected ServerError")
-      // body was 20KiB but we only slurp 8KiB into the error message.
+      if (result.success || result.error.type !== "server") throw new Error("expected a server failure")
       if (result.error.message.length > 8 * 1024) throw new Error("error body should be capped at 8KiB")
     },
   )
 })
 
 Deno.test("createHttpClient - error-body cap counts bytes, not characters (multi-byte UTF-8 cannot overshoot)", async () => {
-  // Each "💩" is 4 bytes UTF-8 / 2 UTF-16 code units. 4096 of them = 16 KiB bytes / 8192 chars.
-  // A char-based cap would let a 4096-emoji body slip through; the byte cap MUST cut it in half.
-  const huge = "💩".repeat(4096)
+  const huge = "\u{1F4A9}".repeat(4096)
   await withFetchStub(
     () => Promise.resolve(new Response(huge, { status: 500 })),
     async () => {
       const client = createHttpClient()
       const result = await client.request({ url: "https://example.com", method: "GET" })
-      if (result.success || result.error.tag !== "ServerError") throw new Error("expected ServerError")
-      // 8 KiB / 4 bytes-per-emoji = 2048 emojis = 4096 UTF-16 code units.
+      if (result.success || result.error.type !== "server") throw new Error("expected a server failure")
       if (result.error.message.length > 4096) throw new Error("byte-based cap must limit multi-byte UTF-8 too")
     },
   )
@@ -225,8 +236,54 @@ Deno.test("createHttpClient - { fetch } override is used instead of globalThis.f
     calls++
     return Promise.resolve(new Response("ok", { status: 200 }))
   }
-  const client = createHttpClient({ fetch: stub })
+  const client = createHttpClient("refuse-private", stub)
   const result = await client.request({ url: "https://example.com", method: "GET" })
   assertEquals(result.success, true)
   assertEquals(calls, 1)
+})
+
+const capturingFetch = (response: () => Response): { fetch: typeof globalThis.fetch; signal: () => AbortSignal } => {
+  let captured: AbortSignal | null = null
+  return {
+    fetch: (_input, init) => {
+      captured = init?.signal ?? null
+      return Promise.resolve(response())
+    },
+    signal: () => {
+      if (captured === null) throw new Error("fetch was not given a signal")
+      return captured
+    },
+  }
+}
+
+Deno.test("createHttpClient - a caller abort after the headers arrive still aborts the body read", async () => {
+  const stub = capturingFetch(() => new Response("body", { status: 200 }))
+  const controller = new AbortController()
+  const result = await createHttpClient("refuse-private", stub.fetch).request({
+    url: "https://example.com",
+    method: "GET",
+    signal: controller.signal,
+  })
+  assertEquals(result.success, true)
+  controller.abort()
+  assertEquals(stub.signal().aborted, true)
+})
+
+Deno.test("createHttpClient - a body stream that errors is a NetworkFailure from its reader", async () => {
+  const failingBody = new ReadableStream<Uint8Array>({ pull: (controller) => controller.error(new TypeError("reset")) })
+  const result = await createHttpClient("refuse-private", () => Promise.resolve(new Response(failingBody))).request({
+    url: "https://example.com",
+    method: "GET",
+  })
+  if (!result.success) throw new Error("expected the headers to arrive")
+  assertEquals(await result.value.text(), failure({ type: "network", message: "reset" }))
+})
+
+Deno.test("createHttpClient - a failing error-body stream yields a ServerFailure describing the stream error", async () => {
+  const streamError = new Error("connection reset")
+  const failingBody = new ReadableStream<Uint8Array>({ pull: (controller) => controller.error(streamError) })
+  const client = createHttpClient("refuse-private", () => Promise.resolve(new Response(failingBody, { status: 502 })))
+  const result = await client.request({ url: "https://example.com", method: "GET" })
+  if (result.success || result.error.type !== "server") throw new Error("expected a server failure")
+  assertEquals(result.error, { type: "server", status: 502, message: "error body unreadable: connection reset" })
 })

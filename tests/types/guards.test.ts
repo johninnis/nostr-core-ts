@@ -1,5 +1,11 @@
 import { assertEquals } from "@std/assert"
-import { isArrayOf, isNumberArray, isRecord, isStringArray } from "../../src/domain/value-object/guards.ts"
+import {
+  isArrayOf,
+  isNonNegativeInteger,
+  isNumberArray,
+  isRecord,
+  isStringArray,
+} from "../../src/domain/service/guards.ts"
 import { isValidTag } from "../../src/domain/value-object/nostr-event.ts"
 
 const isString = (value: unknown): value is string => typeof value === "string"
@@ -66,6 +72,10 @@ Deno.test("isValidTag - true for a multi-string tag", () => {
   assertEquals(isValidTag(["p", "abcd"]), true)
 })
 
+Deno.test("isValidTag - true for a tag whose name is the empty string (NIP-01: one or more strings; shared ADR-0103)", () => {
+  assertEquals(isValidTag(["", "x"]), true)
+})
+
 Deno.test("isValidTag - false for empty array", () => {
   assertEquals(isValidTag([]), false)
 })
@@ -78,4 +88,17 @@ Deno.test("isValidTag - false for non-array root", () => {
   assertEquals(isValidTag("nope"), false)
   assertEquals(isValidTag(null), false)
   assertEquals(isValidTag({ 0: "p" }), false)
+})
+
+Deno.test("isNonNegativeInteger - true for zero and positive safe integers", () => {
+  assertEquals(isNonNegativeInteger(0), true)
+  assertEquals(isNonNegativeInteger(1700000000), true)
+})
+
+Deno.test("isNonNegativeInteger - false for negatives, fractions, unsafe integers and non-numbers", () => {
+  assertEquals(isNonNegativeInteger(-3), false)
+  assertEquals(isNonNegativeInteger(1.5), false)
+  assertEquals(isNonNegativeInteger(Number.MAX_SAFE_INTEGER + 1), false)
+  assertEquals(isNonNegativeInteger("1"), false)
+  assertEquals(isNonNegativeInteger(Number.NaN), false)
 })

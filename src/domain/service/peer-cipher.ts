@@ -1,17 +1,21 @@
 import type { PublicKey } from "../value-object/public-key.ts"
 import type { Result } from "../value-object/result.ts"
-import type { SignerError } from "../exception/signer-error.ts"
+import type { SignerFailure } from "../failure/signer-failure.ts"
 
 /**
- * The peer-addressed encryption capability shared by every `Signer`: NIP-04 and NIP-44
- * encrypt/decrypt against a counterparty `pubkey`, each returning a `Result` (per-message crypto
- * is an expected-failure mode — see {@link Signer}). Helpers that only need to encrypt or decrypt —
- * not sign events or fetch keys — depend on this narrow port instead of the full `Signer`, so a
- * JSON codec is not coupled to `signEvent`. `Signer extends PeerCipher`, so any `Signer` satisfies it.
+ * One peer-addressed cipher operation: encrypt or decrypt `text` for or from `pubkey`, returning the result or a
+ * `SignerFailure`.
+ */
+export type PeerCipherFn = (pubkey: PublicKey, text: string) => Promise<Result<string, SignerFailure>>
+
+/**
+ * The peer-addressed encryption capability shared by every `Signer`: NIP-04 and NIP-44 encrypt/decrypt against a
+ * counterparty `pubkey`. Code that only encrypts or decrypts — not signs or reads its own key — depends on this narrow
+ * port instead of the full `Signer`, and any `Signer` satisfies it.
  */
 export interface PeerCipher {
-  readonly nip04Encrypt: (pubkey: PublicKey, plaintext: string) => Promise<Result<string, SignerError>>
-  readonly nip04Decrypt: (pubkey: PublicKey, ciphertext: string) => Promise<Result<string, SignerError>>
-  readonly nip44Encrypt: (pubkey: PublicKey, plaintext: string) => Promise<Result<string, SignerError>>
-  readonly nip44Decrypt: (pubkey: PublicKey, ciphertext: string) => Promise<Result<string, SignerError>>
+  readonly nip04Encrypt: PeerCipherFn
+  readonly nip04Decrypt: PeerCipherFn
+  readonly nip44Encrypt: PeerCipherFn
+  readonly nip44Decrypt: PeerCipherFn
 }

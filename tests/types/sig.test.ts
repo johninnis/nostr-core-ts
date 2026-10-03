@@ -1,5 +1,7 @@
-import { assertEquals, assertThrows } from "@std/assert"
-import { InvalidSigError, isValidSig, parseSig } from "../../src/domain/value-object/sig.ts"
+import { assertEquals } from "@std/assert"
+import { isValidSig, parseSig } from "../../src/domain/value-object/sig.ts"
+
+const SAMPLES: ReadonlyArray<string> = ["a".repeat(128), "A".repeat(128), "a".repeat(127), "not a sig", ""]
 
 const VALID_SIG = "a".repeat(128)
 
@@ -32,30 +34,21 @@ Deno.test("parseSig - returns branded Sig for valid hex", () => {
   assertEquals(parseSig(VALID_SIG), VALID_SIG)
 })
 
-Deno.test("parseSig - lowercases mixed-case input", () => {
-  const mixed = "A".repeat(64) + "b".repeat(64)
-  assertEquals(parseSig(mixed), mixed.toLowerCase())
+Deno.test("parseSig - rejects mixed-case input (NIP-01 requires lowercase)", () => {
+  assertEquals(parseSig("A".repeat(64) + "b".repeat(64)), null)
 })
 
-Deno.test("parseSig - throws InvalidSigError for malformed input", () => {
-  assertThrows(() => parseSig("not a sig"), InvalidSigError)
-  assertThrows(() => parseSig(""), InvalidSigError)
+Deno.test("parseSig - returns null for malformed input", () => {
+  assertEquals(parseSig("not a sig"), null)
+  assertEquals(parseSig(""), null)
 })
 
-Deno.test("InvalidSigError - retains the raw input for diagnostics", () => {
-  const raw = "not a sig"
-  try {
-    parseSig(raw)
-  } catch (err) {
-    assertEquals(err instanceof InvalidSigError, true)
-    if (err instanceof InvalidSigError) assertEquals(err.raw, raw)
-    return
-  }
-  throw new Error("expected throw")
+Deno.test("parseSig - returns null for non-string input", () => {
+  assertEquals(parseSig(42), null)
+  assertEquals(parseSig(null), null)
+  assertEquals(parseSig(undefined), null)
 })
 
-Deno.test("InvalidSigError - has the configured tag name", () => {
-  const err = new InvalidSigError("bad")
-  assertEquals(err.name, "InvalidSigError")
-  assertEquals(err.tag, "InvalidSigError")
+Deno.test("isValidSig - holds exactly when parseSig returns its input unchanged", () => {
+  for (const raw of SAMPLES) assertEquals(isValidSig(raw), parseSig(raw) === raw, raw)
 })
