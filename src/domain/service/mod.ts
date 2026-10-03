@@ -132,7 +132,13 @@ export { isUserRejection } from "./user-rejection.ts"
 
 export { buildNip98AuthEvent } from "./nip98-builder.ts"
 export type { BuildNip98AuthEventInput } from "./nip98-builder.ts"
-export { encodeAuthHeader, NIP98_AUTH_HEADER_PREFIX, parseAuthHeader } from "./auth-header.ts"
+export {
+  encodeAuthHeader,
+  encodeBlossomAuthHeader,
+  NIP98_AUTH_HEADER_PREFIX,
+  parseAuthHeader,
+  parseBlossomAuthHeader,
+} from "./auth-header.ts"
 export type { ValidateEventRequest } from "./nip98-event-check.ts"
 
 export { randomBytes, randomUint32 } from "./random.ts"
