@@ -44,6 +44,8 @@ export const KIND_GIFT_WRAP = 1059 as const
 export const KIND_FILE_METADATA = 1063 as const
 /** NIP-22 kind 1111 — comment on an event (the universal reply kind). */
 export const KIND_COMMENT = 1111 as const
+/** NIP-56 kind 1984 — reporting (flags content or a user to relays and clients). */
+export const KIND_REPORTING = 1984 as const
 /** NIP-61 kind 9321 — nutzap (Cashu-backed zap). */
 export const KIND_NUTZAP = 9321 as const
 /** NIP-57 kind 9734 — zap request (signed by payer, sent to LNURL endpoint). */
@@ -102,6 +104,8 @@ export const KIND_CLIENT_AUTH = 22242 as const
 export const KIND_EPHEMERAL_GIFT_WRAP = 21059 as const
 /** NIP-46 kind 24133 — nostr-connect (remote signer) RPC. */
 export const KIND_NOSTR_CONNECT = 24133 as const
+/** BUD-11 kind 24242 — Blossom authorisation (the `t`-tag verb names the blob operation it permits). */
+export const KIND_BLOSSOM_AUTHORISATION = 24242 as const
 /** NIP-98 kind 27235 — HTTP auth event (`Authorization: Nostr <base64>`). */
 export const KIND_HTTP_AUTH = 27235 as const
 
