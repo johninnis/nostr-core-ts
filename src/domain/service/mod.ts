@@ -40,7 +40,13 @@ export type { ReplyHint } from "./reply.ts"
 
 export { serialiseEvent } from "./event-json.ts"
 export type { EventToSign } from "./event-id.ts"
-export { buildAddressableEventFilter, buildEventFilter, parseNostrEvent, parseNostrInput } from "./event-utils.ts"
+export {
+  buildAddressableEventFilter,
+  buildEventFilter,
+  parseNostrEvent,
+  parseNostrInput,
+  parseUnsignedEvent,
+} from "./event-utils.ts"
 export type { ParsedNostrInput } from "./event-utils.ts"
 export { sha256Hex } from "./sha256.ts"
 export { verifyEventSignature } from "./verify.ts"

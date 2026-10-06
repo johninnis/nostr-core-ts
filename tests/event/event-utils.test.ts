@@ -4,6 +4,7 @@ import {
   buildEventFilter,
   parseNostrEvent,
   parseNostrInput,
+  parseUnsignedEvent,
 } from "../../src/domain/service/event-utils.ts"
 import {
   encodeEventIdToNote,
@@ -190,4 +191,33 @@ Deno.test("parseNostrEvent - returns null when kind is not an integer", () => {
 
 Deno.test("parseNostrEvent - returns null when created_at is negative", () => {
   assertEquals(parseNostrEvent({ ...validEvent, created_at: -3 }), null)
+})
+
+const validTemplate = {
+  kind: 30023,
+  created_at: 1700000000,
+  tags: [["d", "my-slug"]],
+  content: "hello",
+}
+
+Deno.test("parseUnsignedEvent - returns a template's four fields for a well-formed value", () => {
+  const parsed = parseUnsignedEvent(validTemplate)
+  assertEquals(parsed, { kind: 30023, created_at: 1700000000, tags: [["d", "my-slug"]], content: "hello" })
+})
+
+Deno.test("parseUnsignedEvent - drops extra fields, so re-serialising never re-emits them", () => {
+  const parsed = parseUnsignedEvent({ ...validTemplate, pubkey: HEX_PUBKEY, sig: "c".repeat(128) })
+  assertEquals(parsed === null ? null : Object.keys(parsed).sort(), ["content", "created_at", "kind", "tags"])
+})
+
+Deno.test("parseUnsignedEvent - returns null for input that is not an object", () => {
+  assertEquals(parseUnsignedEvent("nope"), null)
+  assertEquals(parseUnsignedEvent(null), null)
+})
+
+Deno.test("parseUnsignedEvent - returns null when a field fails the same checks a signed event does", () => {
+  assertEquals(parseUnsignedEvent({ ...validTemplate, kind: 65536 }), null)
+  assertEquals(parseUnsignedEvent({ ...validTemplate, created_at: -3 }), null)
+  assertEquals(parseUnsignedEvent({ ...validTemplate, tags: [[]] }), null)
+  assertEquals(parseUnsignedEvent({ ...validTemplate, content: undefined }), null)
 })
