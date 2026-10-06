@@ -56,7 +56,7 @@ export { extractContentReferences, leadingContentReference } from "./content-ref
 export type { ContentReference } from "./content-reference.ts"
 export { eventHasHashtag, extractHashtags, findHashtags, normaliseHashtag } from "./hashtag.ts"
 export type { HashtagMention } from "./hashtag.ts"
-export { isEventExpired } from "./expiration.ts"
+export { isEventExpired, withExpiration } from "./expiration.ts"
 export { canFilterMatch, compileFilter, compileFilters } from "./filter.ts"
 export type { CompiledFilter } from "./filter.ts"
 export { hashFilters } from "./filter-hash.ts"
