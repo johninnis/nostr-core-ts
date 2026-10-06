@@ -4,18 +4,31 @@ import { parseDecimalInteger } from "./decimal.ts"
 import { isNonNegativeInteger } from "./guards.ts"
 import { extractTagValues } from "./tags.ts"
 
-const expiresAtOrBefore = (value: string, at: number): boolean => {
-  const expiresAt = parseDecimalInteger(value)
-  return expiresAt !== null && expiresAt <= at
+// Deliberate: the earliest stated expiry that parses decides, so tag order never does — see shared ADR-0011
+/**
+ * The earliest expiry `event` states (Unix seconds), or `null` when none of its `expiration` tags parses as a
+ * canonical decimal — a value with a sign or a leading zero is not an expiry and is ignored. Public so a store can
+ * derive the same instant from the tag values it indexed, without decoding the event.
+ */
+export const expiryOf = (event: { readonly tags: ReadonlyArray<Tag> }): number | null => {
+  let earliest: number | null = null
+  for (const value of extractTagValues(event.tags, "expiration")) {
+    const expiresAt = parseDecimalInteger(value)
+    if (expiresAt !== null && (earliest === null || expiresAt < earliest)) {
+      earliest = expiresAt
+    }
+  }
+  return earliest
 }
 
-// Deliberate: expired once ANY stated expiry has passed, so tag order never decides — see shared ADR-0011
 /**
- * Whether `event` is expired at `at` (Unix seconds) under NIP-40: `true` once any of its `expiration` tags names a time
- * at or before `at`. A value that is not a decimal Unix timestamp is not an expiry and is ignored.
+ * Whether `event` is expired at `at` (Unix seconds) under NIP-40: `true` once the earliest expiry it states is at or
+ * before `at`, which is once any stated expiry has passed.
  */
-export const isEventExpired = (event: { readonly tags: ReadonlyArray<Tag> }, at: number): boolean =>
-  extractTagValues(event.tags, "expiration").some((value) => expiresAtOrBefore(value, at))
+export const isEventExpired = (event: { readonly tags: ReadonlyArray<Tag> }, at: number): boolean => {
+  const expiresAt = expiryOf(event)
+  return expiresAt !== null && expiresAt <= at
+}
 
 /**
  * `event` with one NIP-40 `expiration` tag naming `expiresAt` (Unix seconds), replacing any `expiration` tags it

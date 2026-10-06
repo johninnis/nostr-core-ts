@@ -1,6 +1,6 @@
 import { assertEquals, assertThrows } from "@std/assert"
 import { InvalidArgumentError } from "../../src/domain/exception/invalid-argument-error.ts"
-import { isEventExpired, withExpiration } from "../../src/domain/service/expiration.ts"
+import { expiryOf, isEventExpired, withExpiration } from "../../src/domain/service/expiration.ts"
 import type { Tag, UnsignedEvent } from "../../src/domain/value-object/nostr-event.ts"
 
 const withTags = (...tags: ReadonlyArray<Tag>): { readonly tags: ReadonlyArray<Tag> } => ({ tags })
@@ -29,6 +29,20 @@ Deno.test("isEventExpired - a value that is not a decimal timestamp is not an ex
 
 Deno.test("isEventExpired - an expiration written with a leading zero is no expiry and is ignored", () => {
   assertEquals(isEventExpired(withTags(["expiration", "0000000001"]), 1800000000), false)
+})
+
+Deno.test("expiryOf - null when the event states no expiry", () => {
+  assertEquals(expiryOf(withTags()), null)
+})
+
+Deno.test("expiryOf - the earliest stated expiry that parses wins, whatever the tag order", () => {
+  assertEquals(expiryOf(withTags(["expiration", "9999999999"], ["expiration", "100"])), 100)
+  assertEquals(expiryOf(withTags(["expiration", "100"], ["expiration", "9999999999"])), 100)
+})
+
+Deno.test("expiryOf - a value that is not a canonical decimal is ignored", () => {
+  assertEquals(expiryOf(withTags(["expiration", "soon"], ["expiration", "0100"], ["expiration", "-1"])), null)
+  assertEquals(expiryOf(withTags(["expiration", "soon"], ["expiration", "100"])), 100)
 })
 
 const template = (...tags: ReadonlyArray<Tag>): UnsignedEvent => ({
