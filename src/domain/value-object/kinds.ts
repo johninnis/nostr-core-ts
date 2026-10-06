@@ -140,6 +140,12 @@ export const KIND_RELEASE_ARTIFACT_SET = 30063 as const
 export const KIND_APPLICATION_SPECIFIC_DATA = 30078 as const
 /** NIP-53 kind 30311 — addressable live-event metadata. */
 export const KIND_LIVE_EVENT = 30311 as const
+/**
+ * NIP-37 kind 31234 — addressable draft wrap: `content` is a draft event, JSON-serialised and NIP-44-encrypted to
+ * the signer's own pubkey, with a `d` tag naming the draft and a `k` tag naming the draft's kind. An empty `content`
+ * signals the draft was deleted.
+ */
+export const KIND_DRAFT_WRAP = 31234 as const
 /** NIP-51 kind 31924 — addressable calendar: a set of NIP-52 calendar events. */
 export const KIND_CALENDAR = 31924 as const
 /** NIP-71 kind 34235 — addressable video event. */

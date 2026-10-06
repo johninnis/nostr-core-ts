@@ -21,6 +21,7 @@ export {
   buildAppSettings,
   buildClientAuth,
   buildDeletion,
+  buildDraftWrap,
   buildHighlightFromEvent,
   buildHighlightFromUrl,
   buildLongform,
@@ -33,7 +34,7 @@ export {
   buildTextNote,
   buildZapRequest,
 } from "./builder.ts"
-export type { BuildLongformInput, BuildZapRequestInput } from "./builder.ts"
+export type { BuildDraftWrapInput, BuildLongformInput, BuildZapRequestInput } from "./builder.ts"
 export { buildReply } from "./reply.ts"
 export type { ReplyHint } from "./reply.ts"
 

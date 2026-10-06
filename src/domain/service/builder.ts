@@ -3,6 +3,7 @@ import { formatAddressableRef } from "../value-object/addressable-ref.ts"
 import {
   KIND_APPLICATION_SPECIFIC_DATA,
   KIND_CLIENT_AUTH,
+  KIND_DRAFT_WRAP,
   KIND_EVENT_DELETION,
   KIND_GENERIC_REPOST,
   KIND_HIGHLIGHT,
@@ -248,6 +249,37 @@ export const buildLongform = (
 }
 
 /**
+ * Input for `buildDraftWrap` — a NIP-37 wrap around a draft event. `dTag` identifies the draft, `draftKind` is the
+ * kind of the event the wrap carries and `content` is that draft, JSON-serialised and NIP-44-encrypted to the
+ * signer's own pubkey, or an empty string to signal the draft was deleted.
+ */
+interface BuildDraftWrapInput {
+  readonly dTag: string
+  readonly draftKind: number
+  readonly content: string
+  /** Pin the `created_at`. Defaults to the system clock ({@link now}). */
+  readonly createdAt?: number
+}
+
+/**
+ * Build an addressable NIP-37 kind-31234 draft wrap: a `d` tag naming the draft, a `k` tag naming the draft's kind
+ * (NIP-37: "The `k` tag is required") and `content` written as given — the caller NIP-44-encrypts the draft to its
+ * own pubkey first, or passes an empty string to delete the draft. A `draftKind` that is not a whole number of zero
+ * or more throws `InvalidArgumentError`.
+ */
+export const buildDraftWrap = ({ dTag, draftKind, content, createdAt }: BuildDraftWrapInput): UnsignedEvent => {
+  if (!isNonNegativeInteger(draftKind)) {
+    throw new InvalidArgumentError(`A draft wrap's k tag is a whole-number event kind, not ${draftKind}`)
+  }
+  return {
+    kind: KIND_DRAFT_WRAP,
+    created_at: createdAt ?? now(),
+    tags: [["d", dTag], ["k", String(draftKind)]],
+    content,
+  }
+}
+
+/**
  * Build a kind-0 profile metadata event (NIP-01); `metadata` is serialised as the JSON object its content is (e.g.
  * `name`, `about`, `picture`). `metadata` is a `T & JsonSerialisable<T>`, so the compiler refuses a function, a bigint
  * and an un-narrowed `unknown`; past a cast, a value `JSON.stringify` writes as no JSON object, an array or a function
@@ -329,4 +361,4 @@ export const buildAppSettings = (dTag: string, content: string): UnsignedEvent =
   content,
 })
 
-export type { BuildLongformInput, BuildZapRequestInput }
+export type { BuildDraftWrapInput, BuildLongformInput, BuildZapRequestInput }
