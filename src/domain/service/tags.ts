@@ -26,6 +26,17 @@ const toRelayMarker = (value: string | undefined): RelayMarker => value === "rea
 export const hasTag = (tags: ReadonlyArray<Tag>, name: string, value: string): boolean =>
   tags.some((t) => t[0] === name && t[1] === value)
 
+/** `true` when `tags` contains any tag whose first element is `name`, whatever follows it. */
+export const hasTagNamed = (tags: ReadonlyArray<Tag>, name: string): boolean => tags.some((t) => t[0] === name)
+
+/** `true` when `a` and `b` hold the same number of tags in the same order, each with the same strings in each place. */
+export const tagsEqual = (a: ReadonlyArray<Tag>, b: ReadonlyArray<Tag>): boolean =>
+  a.length === b.length &&
+  a.every((tag, index) => {
+    const other = b[index]
+    return other !== undefined && tag.length === other.length && tag.every((value, i) => value === other[i])
+  })
+
 /** Append `[name, value]` if no matching tag is present; returns the original array otherwise (no duplication). */
 export const addTag = (tags: ReadonlyArray<Tag>, name: string, value: string): ReadonlyArray<Tag> =>
   hasTag(tags, name, value) ? tags : [...tags, [name, value]]
@@ -45,23 +56,47 @@ export const extractTagValues = (tags: ReadonlyArray<Tag>, tagName: string): Rea
 
 /**
  * What the `tagName` tags state as their one value: `one` with the value, the empty string included; `absent` when no
- * tag carries one; `disagreeing` when they carry different values, `value` being `null` for both. A value repeated
- * across tags is one claim and tags that disagree state no value, so tag order never decides the answer (shared
- * ADR-0014).
+ * tag carries one; `disagreeing` when they carry different values, `value` being `null` for both, and `distinctValues`
+ * naming each value seen. A value repeated across tags is one claim and tags that disagree state no value, so tag order
+ * never decides the answer (shared ADR-0014). With `canonicalise`, each value is read in the canonical form it gives,
+ * so two spellings of one canonical value are one claim, and a value it gives no form (`null`) takes no part.
  */
-export const soleTagValue = (tags: ReadonlyArray<Tag>, tagName: string): SoleTagValue =>
-  soleValue(tags.flatMap((t) => t[0] === tagName && t[1] !== undefined ? [t[1]] : []))
+export function soleTagValue(tags: ReadonlyArray<Tag>, tagName: string): SoleTagValue
+export function soleTagValue<T extends string>(
+  tags: ReadonlyArray<Tag>,
+  tagName: string,
+  canonicalise: (value: string) => T | null,
+): SoleTagValue<T>
+export function soleTagValue(
+  tags: ReadonlyArray<Tag>,
+  tagName: string,
+  canonicalise: (value: string) => string | null = (value) => value,
+): SoleTagValue {
+  return soleValue(tags.flatMap((t) => t[0] === tagName && t[1] !== undefined ? canonicalise(t[1]) ?? [] : []))
+}
 
 /** Every valid `PublicKey` the `p` tags of `tags` name, once each, in the order first tagged. */
 export const extractPubkeys = (tags: ReadonlyArray<Tag>): ReadonlyArray<PublicKey> =>
   extractTagValues(tags, "p").filter(isValidPublicKey)
 
-/** Extract `(url, marker)` entries from `r` tags, normalising URLs and defaulting unknown markers to `"both"`. */
+const unionMarker = (a: RelayMarker, b: RelayMarker): RelayMarker => a === b ? a : "both"
+
+// Deliberate: a relay's marker is the union across its r tags, so tag order never decides it — see shared ADR-0108
+/**
+ * Every relay the `r` tags name, once each by canonical URL in the order first named, its marker the union of every tag
+ * naming it: a relay one tag marks `read` and another `write` is used both ways, and a marker other than `read` or
+ * `write` is both (shared ADR-0108).
+ */
 export const extractRelayEntries = (tags: ReadonlyArray<Tag>): ReadonlyArray<RelayEntry> =>
-  tags.flatMap((t) => {
-    const url = t[0] === "r" ? parseRelayUrl(t[1]) : null
-    return url === null ? [] : [{ url, marker: toRelayMarker(t[2]) }]
-  })
+  [
+    ...tags.reduce((markers, tag) => {
+      const url = tag[0] === "r" ? parseRelayUrl(tag[1]) : null
+      if (url === null) return markers
+      const known = markers.get(url)
+      const marker = toRelayMarker(tag[2])
+      return markers.set(url, known === undefined ? marker : unionMarker(known, marker))
+    }, new Map<RelayUrl, RelayMarker>()),
+  ].map(([url, marker]) => ({ url, marker }))
 
 /** Every valid `EventId` the `e` tags of `tags` name, once each, in the order first tagged. */
 export const extractEventIds = (tags: ReadonlyArray<Tag>): ReadonlyArray<EventId> =>
@@ -127,10 +162,8 @@ const relayMarkerFor = (read: boolean, write: boolean): RelayMarker | null =>
  * decides it: a relay one tag marks `read` and another `write` is used both ways (shared ADR-0108). `null` when no tag
  * names the relay.
  */
-export const getRelayEntryMarker = (tags: ReadonlyArray<Tag>, url: RelayUrl): RelayMarker | null => {
-  const markers = tags.flatMap((t) => isRelayTagFor(t, url) ? [toRelayMarker(t[2])] : [])
-  return relayMarkerFor(markers.some((m) => m !== "write"), markers.some((m) => m !== "read"))
-}
+export const getRelayEntryMarker = (tags: ReadonlyArray<Tag>, url: RelayUrl): RelayMarker | null =>
+  extractRelayEntries(tags).find((entry) => entry.url === url)?.marker ?? null
 
 const relayTag = (url: RelayUrl, marker: RelayMarker): Tag => marker === "both" ? ["r", url] : ["r", url, marker]
 

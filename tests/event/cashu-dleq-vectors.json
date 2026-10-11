@@ -1,0 +1,338 @@
+{
+  "source": "innis/nostr-core CashuDleqVerifier and @innis/nostr-core verifyNutzapDleq: NUT-00 hash_to_curve, each message as hex with its point, and NUT-12 DLEQ proofs a receiver checks, each with the mint key for its amount and whether it verifies (shared ADR-0121). The P2PK-locked proofs were signed with the NUT-12 deterministic nonce and checked with cashu-ts hasValidDleq; keysResponse is the NUT-01 keys response of their keyset",
+  "hashToCurve": [
+    [
+      "0000000000000000000000000000000000000000000000000000000000000000",
+      "024cce997d3b518f739663b757deaec95bcd9473c30a14ac2fd04023a739d1a725"
+    ],
+    [
+      "0000000000000000000000000000000000000000000000000000000000000001",
+      "022e7158e11c9506f1aa4248bf531298daa7febd6194f003edcd9b93ade6253acf"
+    ],
+    [
+      "0000000000000000000000000000000000000000000000000000000000000002",
+      "026cdbe15362df59cd1dd3c9c11de8aedac2106eca69236ecd9fbe117af897be4f"
+    ]
+  ],
+  "proofs": [
+    [
+      "NUT-12's own proof vector, signed by the generator's key",
+      "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
+      {
+        "amount": 1,
+        "id": "00882760bfa2eb41",
+        "secret": "daf4dd00a2b68a0858a80450f52c8a7d2ccf87d375e43e216e0c571f089f63e9",
+        "C": "024369d2d22a80ecf78f3937da9d5f30c1b9f74f0c32684d583cca0fa6a61cdcfc",
+        "dleq": {
+          "e": "b31e58ac6527f34975ffab13e70a48b6d2b0d35abc4b03f0151f09ee1a9763d4",
+          "s": "8fbae004c59e754d71df67e392b6ae4e29293113ddc2ec86592a0431d16306d8",
+          "r": "a6d13fcd7a18442e6076f5e1e7c887ad5de40a019824bdfa9fe740d302e8d861"
+        }
+      },
+      true
+    ],
+    [
+      "NUT-12's proof vector with its hex in upper case",
+      "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
+      {
+        "amount": 1,
+        "id": "00882760bfa2eb41",
+        "secret": "daf4dd00a2b68a0858a80450f52c8a7d2ccf87d375e43e216e0c571f089f63e9",
+        "C": "024369D2D22A80ECF78F3937DA9D5F30C1B9F74F0C32684D583CCA0FA6A61CDCFC",
+        "dleq": {
+          "e": "B31E58AC6527F34975FFAB13E70A48B6D2B0D35ABC4B03F0151F09EE1A9763D4",
+          "s": "8FBAE004C59E754D71DF67E392B6AE4E29293113DDC2EC86592A0431D16306D8",
+          "r": "A6D13FCD7A18442E6076F5E1E7C887AD5DE40A019824BDFA9FE740D302E8D861"
+        }
+      },
+      true
+    ],
+    [
+      "a P2PK-locked proof of 8",
+      "036c880a89964c2efbb499dadedd3d4292e4f0506c070c083722a0df2e0a420e7c",
+      {
+        "amount": 8,
+        "id": "0024332537024204",
+        "secret": "[\"P2PK\",{\"nonce\":\"a7937b64b8caa58f03721bb6bacf5c78cb235febe0e70b1b84cd99541461a08e\",\"data\":\"02eaee8939e3565e48cc62967e2fde9d8e2a4b3ec0081f29eceff5c64ef10ac1ed\"}]",
+        "C": "02a0fe1b4403b21122ab71449c7b435d7ec3355476e07eb0003dc2e8ec79d73a57",
+        "dleq": {
+          "e": "6862a4e22baf51d939e0ad471cccd3aa5dac8ddbf053fd1db599acd683ee02c6",
+          "s": "ff78834e37e7f3b83932dc46d7a7856f1684f820cd268056b8022afa02806c0d",
+          "r": "75ecdf673fb0d47b478369020daaef3b70514dd5c73d9d0fcf8c045b4769c4ef"
+        }
+      },
+      true
+    ],
+    [
+      "a P2PK-locked proof of 2",
+      "03b0bd04b554e6be2874acee1ddb6cc919e2206655d1bbbaa105131917de7a218b",
+      {
+        "amount": 2,
+        "id": "0024332537024204",
+        "secret": "[\"P2PK\",{\"nonce\":\"16367aacb67a4a017c8da8ab95682ccb390863780f7114dda0a0e0c55644c7c4\",\"data\":\"02eaee8939e3565e48cc62967e2fde9d8e2a4b3ec0081f29eceff5c64ef10ac1ed\"}]",
+        "C": "03c337c1260e390589cd1fbf9efb4c48923a74aa5546ab83e8809f02108e4f50be",
+        "dleq": {
+          "e": "9add5062092ede7a011a3ee8b81fc3c212be9264e3d35782b0f164883228422a",
+          "s": "a20c1bfd2ff6b6d901429ea86c7400f3fcdd6f59c1d95df617dc7f7bd10dc13b",
+          "r": "a2db92b0f7d08ca3b1282ef9b2716db83ab4fed8e256505b2ee3491be3a774e3"
+        }
+      },
+      true
+    ],
+    [
+      "checked against the key of another amount",
+      "03b0bd04b554e6be2874acee1ddb6cc919e2206655d1bbbaa105131917de7a218b",
+      {
+        "amount": 8,
+        "id": "0024332537024204",
+        "secret": "[\"P2PK\",{\"nonce\":\"a7937b64b8caa58f03721bb6bacf5c78cb235febe0e70b1b84cd99541461a08e\",\"data\":\"02eaee8939e3565e48cc62967e2fde9d8e2a4b3ec0081f29eceff5c64ef10ac1ed\"}]",
+        "C": "02a0fe1b4403b21122ab71449c7b435d7ec3355476e07eb0003dc2e8ec79d73a57",
+        "dleq": {
+          "e": "6862a4e22baf51d939e0ad471cccd3aa5dac8ddbf053fd1db599acd683ee02c6",
+          "s": "ff78834e37e7f3b83932dc46d7a7856f1684f820cd268056b8022afa02806c0d",
+          "r": "75ecdf673fb0d47b478369020daaef3b70514dd5c73d9d0fcf8c045b4769c4ef"
+        }
+      },
+      false
+    ],
+    [
+      "its e from another proof",
+      "036c880a89964c2efbb499dadedd3d4292e4f0506c070c083722a0df2e0a420e7c",
+      {
+        "amount": 8,
+        "id": "0024332537024204",
+        "secret": "[\"P2PK\",{\"nonce\":\"a7937b64b8caa58f03721bb6bacf5c78cb235febe0e70b1b84cd99541461a08e\",\"data\":\"02eaee8939e3565e48cc62967e2fde9d8e2a4b3ec0081f29eceff5c64ef10ac1ed\"}]",
+        "C": "02a0fe1b4403b21122ab71449c7b435d7ec3355476e07eb0003dc2e8ec79d73a57",
+        "dleq": {
+          "e": "9add5062092ede7a011a3ee8b81fc3c212be9264e3d35782b0f164883228422a",
+          "s": "ff78834e37e7f3b83932dc46d7a7856f1684f820cd268056b8022afa02806c0d",
+          "r": "75ecdf673fb0d47b478369020daaef3b70514dd5c73d9d0fcf8c045b4769c4ef"
+        }
+      },
+      false
+    ],
+    [
+      "its s from another proof",
+      "036c880a89964c2efbb499dadedd3d4292e4f0506c070c083722a0df2e0a420e7c",
+      {
+        "amount": 8,
+        "id": "0024332537024204",
+        "secret": "[\"P2PK\",{\"nonce\":\"a7937b64b8caa58f03721bb6bacf5c78cb235febe0e70b1b84cd99541461a08e\",\"data\":\"02eaee8939e3565e48cc62967e2fde9d8e2a4b3ec0081f29eceff5c64ef10ac1ed\"}]",
+        "C": "02a0fe1b4403b21122ab71449c7b435d7ec3355476e07eb0003dc2e8ec79d73a57",
+        "dleq": {
+          "e": "6862a4e22baf51d939e0ad471cccd3aa5dac8ddbf053fd1db599acd683ee02c6",
+          "s": "a20c1bfd2ff6b6d901429ea86c7400f3fcdd6f59c1d95df617dc7f7bd10dc13b",
+          "r": "75ecdf673fb0d47b478369020daaef3b70514dd5c73d9d0fcf8c045b4769c4ef"
+        }
+      },
+      false
+    ],
+    [
+      "its r from another proof",
+      "036c880a89964c2efbb499dadedd3d4292e4f0506c070c083722a0df2e0a420e7c",
+      {
+        "amount": 8,
+        "id": "0024332537024204",
+        "secret": "[\"P2PK\",{\"nonce\":\"a7937b64b8caa58f03721bb6bacf5c78cb235febe0e70b1b84cd99541461a08e\",\"data\":\"02eaee8939e3565e48cc62967e2fde9d8e2a4b3ec0081f29eceff5c64ef10ac1ed\"}]",
+        "C": "02a0fe1b4403b21122ab71449c7b435d7ec3355476e07eb0003dc2e8ec79d73a57",
+        "dleq": {
+          "e": "6862a4e22baf51d939e0ad471cccd3aa5dac8ddbf053fd1db599acd683ee02c6",
+          "s": "ff78834e37e7f3b83932dc46d7a7856f1684f820cd268056b8022afa02806c0d",
+          "r": "a2db92b0f7d08ca3b1282ef9b2716db83ab4fed8e256505b2ee3491be3a774e3"
+        }
+      },
+      false
+    ],
+    [
+      "its C from another proof",
+      "036c880a89964c2efbb499dadedd3d4292e4f0506c070c083722a0df2e0a420e7c",
+      {
+        "amount": 8,
+        "id": "0024332537024204",
+        "secret": "[\"P2PK\",{\"nonce\":\"a7937b64b8caa58f03721bb6bacf5c78cb235febe0e70b1b84cd99541461a08e\",\"data\":\"02eaee8939e3565e48cc62967e2fde9d8e2a4b3ec0081f29eceff5c64ef10ac1ed\"}]",
+        "C": "03c337c1260e390589cd1fbf9efb4c48923a74aa5546ab83e8809f02108e4f50be",
+        "dleq": {
+          "e": "6862a4e22baf51d939e0ad471cccd3aa5dac8ddbf053fd1db599acd683ee02c6",
+          "s": "ff78834e37e7f3b83932dc46d7a7856f1684f820cd268056b8022afa02806c0d",
+          "r": "75ecdf673fb0d47b478369020daaef3b70514dd5c73d9d0fcf8c045b4769c4ef"
+        }
+      },
+      false
+    ],
+    [
+      "its secret from another proof",
+      "036c880a89964c2efbb499dadedd3d4292e4f0506c070c083722a0df2e0a420e7c",
+      {
+        "amount": 8,
+        "id": "0024332537024204",
+        "secret": "[\"P2PK\",{\"nonce\":\"16367aacb67a4a017c8da8ab95682ccb390863780f7114dda0a0e0c55644c7c4\",\"data\":\"02eaee8939e3565e48cc62967e2fde9d8e2a4b3ec0081f29eceff5c64ef10ac1ed\"}]",
+        "C": "02a0fe1b4403b21122ab71449c7b435d7ec3355476e07eb0003dc2e8ec79d73a57",
+        "dleq": {
+          "e": "6862a4e22baf51d939e0ad471cccd3aa5dac8ddbf053fd1db599acd683ee02c6",
+          "s": "ff78834e37e7f3b83932dc46d7a7856f1684f820cd268056b8022afa02806c0d",
+          "r": "75ecdf673fb0d47b478369020daaef3b70514dd5c73d9d0fcf8c045b4769c4ef"
+        }
+      },
+      false
+    ],
+    [
+      "an s of zero",
+      "036c880a89964c2efbb499dadedd3d4292e4f0506c070c083722a0df2e0a420e7c",
+      {
+        "amount": 8,
+        "id": "0024332537024204",
+        "secret": "[\"P2PK\",{\"nonce\":\"a7937b64b8caa58f03721bb6bacf5c78cb235febe0e70b1b84cd99541461a08e\",\"data\":\"02eaee8939e3565e48cc62967e2fde9d8e2a4b3ec0081f29eceff5c64ef10ac1ed\"}]",
+        "C": "02a0fe1b4403b21122ab71449c7b435d7ec3355476e07eb0003dc2e8ec79d73a57",
+        "dleq": {
+          "e": "6862a4e22baf51d939e0ad471cccd3aa5dac8ddbf053fd1db599acd683ee02c6",
+          "s": "0000000000000000000000000000000000000000000000000000000000000000",
+          "r": "75ecdf673fb0d47b478369020daaef3b70514dd5c73d9d0fcf8c045b4769c4ef"
+        }
+      },
+      false
+    ],
+    [
+      "an s equal to the curve order",
+      "036c880a89964c2efbb499dadedd3d4292e4f0506c070c083722a0df2e0a420e7c",
+      {
+        "amount": 8,
+        "id": "0024332537024204",
+        "secret": "[\"P2PK\",{\"nonce\":\"a7937b64b8caa58f03721bb6bacf5c78cb235febe0e70b1b84cd99541461a08e\",\"data\":\"02eaee8939e3565e48cc62967e2fde9d8e2a4b3ec0081f29eceff5c64ef10ac1ed\"}]",
+        "C": "02a0fe1b4403b21122ab71449c7b435d7ec3355476e07eb0003dc2e8ec79d73a57",
+        "dleq": {
+          "e": "6862a4e22baf51d939e0ad471cccd3aa5dac8ddbf053fd1db599acd683ee02c6",
+          "s": "fffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141",
+          "r": "75ecdf673fb0d47b478369020daaef3b70514dd5c73d9d0fcf8c045b4769c4ef"
+        }
+      },
+      false
+    ],
+    [
+      "an r of zero",
+      "036c880a89964c2efbb499dadedd3d4292e4f0506c070c083722a0df2e0a420e7c",
+      {
+        "amount": 8,
+        "id": "0024332537024204",
+        "secret": "[\"P2PK\",{\"nonce\":\"a7937b64b8caa58f03721bb6bacf5c78cb235febe0e70b1b84cd99541461a08e\",\"data\":\"02eaee8939e3565e48cc62967e2fde9d8e2a4b3ec0081f29eceff5c64ef10ac1ed\"}]",
+        "C": "02a0fe1b4403b21122ab71449c7b435d7ec3355476e07eb0003dc2e8ec79d73a57",
+        "dleq": {
+          "e": "6862a4e22baf51d939e0ad471cccd3aa5dac8ddbf053fd1db599acd683ee02c6",
+          "s": "ff78834e37e7f3b83932dc46d7a7856f1684f820cd268056b8022afa02806c0d",
+          "r": "0000000000000000000000000000000000000000000000000000000000000000"
+        }
+      },
+      false
+    ],
+    [
+      "an e of 31 bytes",
+      "036c880a89964c2efbb499dadedd3d4292e4f0506c070c083722a0df2e0a420e7c",
+      {
+        "amount": 8,
+        "id": "0024332537024204",
+        "secret": "[\"P2PK\",{\"nonce\":\"a7937b64b8caa58f03721bb6bacf5c78cb235febe0e70b1b84cd99541461a08e\",\"data\":\"02eaee8939e3565e48cc62967e2fde9d8e2a4b3ec0081f29eceff5c64ef10ac1ed\"}]",
+        "C": "02a0fe1b4403b21122ab71449c7b435d7ec3355476e07eb0003dc2e8ec79d73a57",
+        "dleq": {
+          "e": "62a4e22baf51d939e0ad471cccd3aa5dac8ddbf053fd1db599acd683ee02c6",
+          "s": "ff78834e37e7f3b83932dc46d7a7856f1684f820cd268056b8022afa02806c0d",
+          "r": "75ecdf673fb0d47b478369020daaef3b70514dd5c73d9d0fcf8c045b4769c4ef"
+        }
+      },
+      false
+    ],
+    [
+      "an r that is not hex",
+      "036c880a89964c2efbb499dadedd3d4292e4f0506c070c083722a0df2e0a420e7c",
+      {
+        "amount": 8,
+        "id": "0024332537024204",
+        "secret": "[\"P2PK\",{\"nonce\":\"a7937b64b8caa58f03721bb6bacf5c78cb235febe0e70b1b84cd99541461a08e\",\"data\":\"02eaee8939e3565e48cc62967e2fde9d8e2a4b3ec0081f29eceff5c64ef10ac1ed\"}]",
+        "C": "02a0fe1b4403b21122ab71449c7b435d7ec3355476e07eb0003dc2e8ec79d73a57",
+        "dleq": {
+          "e": "6862a4e22baf51d939e0ad471cccd3aa5dac8ddbf053fd1db599acd683ee02c6",
+          "s": "ff78834e37e7f3b83932dc46d7a7856f1684f820cd268056b8022afa02806c0d",
+          "r": "zzecdf673fb0d47b478369020daaef3b70514dd5c73d9d0fcf8c045b4769c4ef"
+        }
+      },
+      false
+    ],
+    [
+      "a C that is no curve point",
+      "036c880a89964c2efbb499dadedd3d4292e4f0506c070c083722a0df2e0a420e7c",
+      {
+        "amount": 8,
+        "id": "0024332537024204",
+        "secret": "[\"P2PK\",{\"nonce\":\"a7937b64b8caa58f03721bb6bacf5c78cb235febe0e70b1b84cd99541461a08e\",\"data\":\"02eaee8939e3565e48cc62967e2fde9d8e2a4b3ec0081f29eceff5c64ef10ac1ed\"}]",
+        "C": "020000000000000000000000000000000000000000000000000000000000000005",
+        "dleq": {
+          "e": "6862a4e22baf51d939e0ad471cccd3aa5dac8ddbf053fd1db599acd683ee02c6",
+          "s": "ff78834e37e7f3b83932dc46d7a7856f1684f820cd268056b8022afa02806c0d",
+          "r": "75ecdf673fb0d47b478369020daaef3b70514dd5c73d9d0fcf8c045b4769c4ef"
+        }
+      },
+      false
+    ],
+    [
+      "a C written uncompressed",
+      "036c880a89964c2efbb499dadedd3d4292e4f0506c070c083722a0df2e0a420e7c",
+      {
+        "amount": 8,
+        "id": "0024332537024204",
+        "secret": "[\"P2PK\",{\"nonce\":\"a7937b64b8caa58f03721bb6bacf5c78cb235febe0e70b1b84cd99541461a08e\",\"data\":\"02eaee8939e3565e48cc62967e2fde9d8e2a4b3ec0081f29eceff5c64ef10ac1ed\"}]",
+        "C": "04a0fe1b4403b21122ab71449c7b435d7ec3355476e07eb0003dc2e8ec79d73a57210cf1579eb29e6c0bc70c15cb54e7b2eb7e5797c0ac9318d14ce69a711ccdf2",
+        "dleq": {
+          "e": "6862a4e22baf51d939e0ad471cccd3aa5dac8ddbf053fd1db599acd683ee02c6",
+          "s": "ff78834e37e7f3b83932dc46d7a7856f1684f820cd268056b8022afa02806c0d",
+          "r": "75ecdf673fb0d47b478369020daaef3b70514dd5c73d9d0fcf8c045b4769c4ef"
+        }
+      },
+      false
+    ],
+    [
+      "a C that cancels the blinding, leaving C' at infinity",
+      "036c880a89964c2efbb499dadedd3d4292e4f0506c070c083722a0df2e0a420e7c",
+      {
+        "amount": 8,
+        "id": "0024332537024204",
+        "secret": "[\"P2PK\",{\"nonce\":\"a7937b64b8caa58f03721bb6bacf5c78cb235febe0e70b1b84cd99541461a08e\",\"data\":\"02eaee8939e3565e48cc62967e2fde9d8e2a4b3ec0081f29eceff5c64ef10ac1ed\"}]",
+        "C": "02044688e010ecf5ee16b3342f8eeb6361ddf3c26d002fc2b52ac1f3fc8ac87e37",
+        "dleq": {
+          "e": "6862a4e22baf51d939e0ad471cccd3aa5dac8ddbf053fd1db599acd683ee02c6",
+          "s": "ff78834e37e7f3b83932dc46d7a7856f1684f820cd268056b8022afa02806c0d",
+          "r": "75ecdf673fb0d47b478369020daaef3b70514dd5c73d9d0fcf8c045b4769c4ef"
+        }
+      },
+      false
+    ],
+    [
+      "a mint key that is no curve point",
+      "020000000000000000000000000000000000000000000000000000000000000005",
+      {
+        "amount": 8,
+        "id": "0024332537024204",
+        "secret": "[\"P2PK\",{\"nonce\":\"a7937b64b8caa58f03721bb6bacf5c78cb235febe0e70b1b84cd99541461a08e\",\"data\":\"02eaee8939e3565e48cc62967e2fde9d8e2a4b3ec0081f29eceff5c64ef10ac1ed\"}]",
+        "C": "02a0fe1b4403b21122ab71449c7b435d7ec3355476e07eb0003dc2e8ec79d73a57",
+        "dleq": {
+          "e": "6862a4e22baf51d939e0ad471cccd3aa5dac8ddbf053fd1db599acd683ee02c6",
+          "s": "ff78834e37e7f3b83932dc46d7a7856f1684f820cd268056b8022afa02806c0d",
+          "r": "75ecdf673fb0d47b478369020daaef3b70514dd5c73d9d0fcf8c045b4769c4ef"
+        }
+      },
+      false
+    ]
+  ],
+  "lockKey": "eaee8939e3565e48cc62967e2fde9d8e2a4b3ec0081f29eceff5c64ef10ac1ed",
+  "keysResponse": {
+    "keysets": [
+      {
+        "id": "0024332537024204",
+        "unit": "sat",
+        "active": true,
+        "keys": {
+          "1": "025c540ad95ab9dc411d4382b5292420163f46d45c077eec1012efb0ed22bd58b7",
+          "2": "03b0bd04b554e6be2874acee1ddb6cc919e2206655d1bbbaa105131917de7a218b",
+          "8": "036c880a89964c2efbb499dadedd3d4292e4f0506c070c083722a0df2e0a420e7c"
+        }
+      }
+    ]
+  }
+}

@@ -1,6 +1,7 @@
 import { assertEquals } from "@std/assert"
 import { sourceFilesMatching } from "../support/source-files.ts"
-import { sha256Hex } from "../../src/domain/service/sha256.ts"
+import { formatHex } from "../../src/domain/service/hex.ts"
+import { sha256Digest, sha256Hex } from "../../src/domain/service/sha256.ts"
 import { isLowercaseHex } from "../../src/domain/value-object/brand.ts"
 
 Deno.test("sha256Hex - hashes the empty string", () => {
@@ -32,6 +33,10 @@ Deno.test("sha256Hex - returns a 64-character lowercase hex digest of bytes", ()
   const digest = sha256Hex(new Uint8Array([1, 2, 3]))
   assertEquals(digest.length, 64)
   assertEquals(isLowercaseHex(digest, 64), true)
+})
+
+Deno.test("sha256Digest - is the digest sha256Hex writes in hex", () => {
+  assertEquals(formatHex(sha256Digest(Uint8Array.of(1, 2, 3))), sha256Hex(Uint8Array.of(1, 2, 3)))
 })
 
 Deno.test("sha256Hex - is the one SHA-256 the source hashes with, beside the vendored NIP-44 file (ADR-0013)", async () => {

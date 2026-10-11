@@ -1,5 +1,6 @@
 // Deliberate: each trim set written out, never the runtime's own trim — see shared ADR-0002 and shared ADR-0068
 const SPACE_AND_NUL_ENDS = /^[ \t\n\r\0\v]+|[ \t\n\r\0\v]+$/g
+const SPACE_AND_TAB_ENDS = /^[ \t]+|[ \t]+$/g
 const UNICODE_WHITESPACE_ENDS = /^[\t\n\v\f\r\p{Zs}\u2028\u2029\uFEFF]+|[\t\n\v\f\r\p{Zs}\u2028\u2029\uFEFF]+$/gu
 
 /**
@@ -13,3 +14,9 @@ export const trimSpaceAndNul = (text: string): string => text.replace(SPACE_AND_
  * U+FEFF — the set a NIP-05 identifier and a zap address are trimmed by (shared ADR-0068).
  */
 export const trimUnicodeWhitespace = (text: string): string => text.replace(UNICODE_WHITESPACE_ENDS, "")
+
+/**
+ * `text` without the spaces and tabs at its ends — RFC 9110's optional whitespace, the set a NIP-94 `m` is trimmed by
+ * before its parameters (shared ADR-0072).
+ */
+export const trimSpaceAndTab = (text: string): string => text.replace(SPACE_AND_TAB_ENDS, "")

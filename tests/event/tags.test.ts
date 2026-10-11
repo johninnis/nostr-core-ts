@@ -1,6 +1,7 @@
 import { assertEquals, assertExists, assertStrictEquals } from "@std/assert"
 import type { Tag } from "../../src/domain/value-object/nostr-event.ts"
-import { eventIdFixture, publicKeyFixture, relayUrlFixture } from "../../testing.ts"
+import { parseHttpUrl } from "../../src/domain/value-object/http-url.ts"
+import { eventIdFixture, httpUrlFixture, publicKeyFixture, relayUrlFixture } from "../../testing.ts"
 import {
   addRelayTag,
   addTag,
@@ -48,34 +49,66 @@ Deno.test("extractTagValues - returns empty array for empty tags", () => {
 })
 
 Deno.test("soleTagValue - returns the value of the one tag with that name", () => {
-  assertEquals(soleTagValue(sampleTags, "title"), { state: "one", value: "My Note" })
+  assertEquals(soleTagValue(sampleTags, "title"), { state: "one", value: "My Note", distinctValues: ["My Note"] })
 })
 
 Deno.test("soleTagValue - is absent when no tag has that name", () => {
-  assertEquals(soleTagValue(sampleTags, "summary"), { state: "absent", value: null })
+  assertEquals(soleTagValue(sampleTags, "summary"), { state: "absent", value: null, distinctValues: [] })
 })
 
 Deno.test("soleTagValue - is absent for a value-less tag", () => {
-  assertEquals(soleTagValue([["solo"]], "solo"), { state: "absent", value: null })
+  assertEquals(soleTagValue([["solo"]], "solo"), { state: "absent", value: null, distinctValues: [] })
 })
 
 Deno.test("soleTagValue - reads a value repeated across tags as one claim (shared ADR-0014)", () => {
-  assertEquals(soleTagValue([["title", "a"], ["p", pk1], ["title", "a"]], "title"), { state: "one", value: "a" })
+  assertEquals(soleTagValue([["title", "a"], ["p", pk1], ["title", "a"]], "title").value, "a")
 })
 
 Deno.test("soleTagValue - is disagreeing for tags that name different values, whatever their order (shared ADR-0014)", () => {
   assertEquals(
-    [soleTagValue([["title", "a"], ["title", "b"]], "title"), soleTagValue([["title", "b"], ["title", "a"]], "title")],
-    [{ state: "disagreeing", value: null }, { state: "disagreeing", value: null }],
+    [soleTagValue([["title", "a"], ["title", "b"]], "title"), soleTagValue([["title", "b"], ["title", "a"]], "title")]
+      .map(({ state, value }) => [state, value]),
+    [["disagreeing", null], ["disagreeing", null]],
   )
 })
 
+Deno.test("soleTagValue - names the distinct values of tags that disagree, in the order first tagged", () => {
+  assertEquals(soleTagValue([["title", "b"], ["title", "a"], ["title", "b"]], "title").distinctValues, ["b", "a"])
+})
+
 Deno.test("soleTagValue - keeps the empty string as a value", () => {
-  assertEquals(soleTagValue([["title", ""]], "title"), { state: "one", value: "" })
+  assertEquals(soleTagValue([["title", ""]], "title").value, "")
 })
 
 Deno.test("soleTagValue - an empty value disagrees with a non-empty one", () => {
-  assertEquals(soleTagValue([["title", ""], ["title", "a"]], "title"), { state: "disagreeing", value: null })
+  assertEquals(soleTagValue([["title", ""], ["title", "a"]], "title").state, "disagreeing")
+})
+
+Deno.test("soleTagValue - reads each value in the canonical form its canonicaliser gives, so two spellings are one claim", () => {
+  const tags: ReadonlyArray<Tag> = [["r", "HTTPS://X.example:443/a"], ["r", "https://x.example/a"]]
+  assertEquals(soleTagValue(tags, "r", parseHttpUrl).value, "https://x.example/a")
+})
+
+Deno.test("soleTagValue - a value its canonicaliser gives no form takes no part", () => {
+  assertEquals(
+    soleTagValue([["r", "not a url"], ["r", "https://x.example/a"]], "r", parseHttpUrl).value,
+    "https://x.example/a",
+  )
+})
+
+Deno.test("soleTagValue - is absent when its canonicaliser gives no value a form", () => {
+  assertEquals(soleTagValue([["r", "not a url"]], "r", parseHttpUrl).state, "absent")
+})
+
+Deno.test("soleTagValue - names the distinct canonical values of tags that disagree", () => {
+  const tags: ReadonlyArray<Tag> = [["r", "HTTPS://A.example/"], ["r", "https://b.example/"], [
+    "r",
+    "https://a.example",
+  ]]
+  assertEquals(soleTagValue(tags, "r", parseHttpUrl).distinctValues, [
+    httpUrlFixture("https://a.example/"),
+    httpUrlFixture("https://b.example/"),
+  ])
 })
 
 Deno.test("extractPubkeys - extracts all p-tag values as PublicKeys", () => {
@@ -108,6 +141,23 @@ Deno.test("extractRelayEntries - defaults marker to both when absent", () => {
   assertExists(secondEntry)
   assertEquals(secondEntry.url, "wss://nos.lol")
   assertEquals(secondEntry.marker, "both")
+})
+
+Deno.test("extractRelayEntries - a relay one tag marks read and another write is one entry used both ways (shared ADR-0108)", () => {
+  const tags: ReadonlyArray<Tag> = [["r", "wss://relay.example.com", "read"], ["r", "wss://relay.example.com", "write"]]
+  assertEquals(extractRelayEntries(tags), [{ url: relayUrlFixture("wss://relay.example.com"), marker: "both" }])
+})
+
+Deno.test("extractRelayEntries - names each relay once, however spelled, in the order first named (shared ADR-0108)", () => {
+  const tags: ReadonlyArray<Tag> = [
+    ["r", "wss://b.example.com", "read"],
+    ["r", "wss://a.example.com"],
+    ["r", "WSS://B.example.com/", "read"],
+  ]
+  assertEquals(extractRelayEntries(tags), [
+    { url: relayUrlFixture("wss://b.example.com"), marker: "read" },
+    { url: relayUrlFixture("wss://a.example.com"), marker: "both" },
+  ])
 })
 
 Deno.test("extractRelayEntries - returns empty array when no r-tags", () => {

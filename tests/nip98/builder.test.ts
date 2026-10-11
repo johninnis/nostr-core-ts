@@ -39,10 +39,20 @@ Deno.test("buildNip98AuthEvent - hashes the body into the payload tag", () => {
   assertEquals(payloadTag?.[1], sha256Hex(body))
 })
 
-Deno.test("buildNip98AuthEvent - preserves the caller's method string verbatim", () => {
-  const event = buildNip98AuthEvent({ url: httpUrlFixture("https://relay.example"), method: "post" })
-  const methodTag = event.tags.find((t) => t[0] === "method")
-  assertEquals(methodTag?.[1], "post")
+const methodWritten = (method: string): string | undefined =>
+  buildNip98AuthEvent({ url: httpUrlFixture("https://relay.example"), method }).tags.find((t) => t[0] === "method")?.[1]
+
+Deno.test("buildNip98AuthEvent - writes Fetch's six standard methods upper-cased, given in any case (shared ADR-0070)", () => {
+  const given = ["delete", "Get", "hEAD", "options", "post", "pUt"]
+  assertEquals(given.map(methodWritten), ["DELETE", "GET", "HEAD", "OPTIONS", "POST", "PUT"])
+})
+
+Deno.test("buildNip98AuthEvent - writes any other method exactly as given, as Fetch sends it (shared ADR-0070)", () => {
+  assertEquals(["patch", "PATCH", "Propfind"].map(methodWritten), ["patch", "PATCH", "Propfind"])
+})
+
+Deno.test("buildNip98AuthEvent - matches a standard method by ASCII letters alone, as Fetch does", () => {
+  assertEquals(methodWritten("po\u017ft"), "po\u017ft")
 })
 
 Deno.test("buildNip98AuthEvent - sets created_at to the current timestamp", () => {

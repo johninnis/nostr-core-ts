@@ -1,6 +1,6 @@
 import type { EventOrAddressRef } from "./event-or-address-ref.ts"
-import type { HttpUrl } from "./http-url.ts"
 import { formatEventOrAddressRef } from "./event-or-address-ref.ts"
+import type { WebUrl } from "./web-url.ts"
 
 /**
  * External content a NIP-22 comment is scoped to by an `I` / `i` tag (NIP-73): its `id` is the tag value (a URL,
@@ -12,7 +12,7 @@ export interface ExternalContentRef {
   readonly type: "external"
   readonly id: string
   readonly kind: string
-  readonly hint: HttpUrl | null
+  readonly hint: WebUrl | null
 }
 
 /**

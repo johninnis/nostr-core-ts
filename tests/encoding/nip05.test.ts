@@ -48,6 +48,15 @@ Deno.test("resolveNip05 - a name inherited from the object prototype is not a ma
   assertEquals(await resolveNip05(okClient({ names: {} }), proto), ok(null))
 })
 
+Deno.test("resolveNip05 - a name the names object inherits from its prototype, as pollution would plant it, is not mapped", async () => {
+  assertEquals(await resolveNip05(okClient({ names: Object.create({ alice: PUBKEY }) }), ALICE), ok(null))
+})
+
+Deno.test("resolveNip05 - a document mapping __proto__ as its own key resolves that name", async () => {
+  const proto = nip05IdFixture("__proto__@example.com")
+  assertEquals(await resolveNip05(okClient(JSON.parse(`{"names":{"__proto__":"${PUBKEY}"}}`)), proto), ok(PUBKEY))
+})
+
 Deno.test("resolveNip05 - an upper-case hex pubkey is not a valid NIP-05 key", async () => {
   assertEquals(await resolveNip05(okClient({ names: { alice: PUBKEY.toUpperCase() } }), ALICE), ok(null))
 })

@@ -15,11 +15,12 @@ import { parseHttpUrl } from "../value-object/http-url.ts"
 /**
  * Input to `Nip98Validator.validate` — the already-parsed event plus the request context (URL, method, optional
  * precomputed body hash). The `u` tag must name `url`, the server's own request URL, exactly once read as an `HttpUrl`:
- * only the scheme's and host's case, a default port, credentials and a fragment are ignored, and the path and query
- * compare as written. A `u` tag that is not an absolute `http` or `https` URL is `u-malformed`. The `method` tag must
- * equal `method` exactly, since RFC 9110 method tokens are case-sensitive. `bodyHash` is the SHA-256 of the body as
- * lowercase hex, which the `payload` tag must equal exactly; the hash of the empty body is no body, as an absent
- * `bodyHash` is, so it neither demands nor admits a `payload` tag (shared ADR-0024).
+ * only the scheme's and host's case, a default port and a fragment are ignored, and the path and query compare as
+ * written. A `u` tag with no `HttpUrl` form, such as one that is not an absolute `http` or `https` URL or that carries
+ * credentials, is `u-malformed`. The `method` tag must equal `method` exactly, since RFC 9110 method tokens are
+ * case-sensitive. `bodyHash` is the SHA-256 of the body as lowercase hex, which the `payload` tag must equal exactly;
+ * the hash of the empty body is no body, as an absent `bodyHash` is, which demands no `payload` tag and admits one only
+ * when it holds that hash (shared ADR-0024).
  */
 export interface ValidateEventRequest {
   readonly event: NostrEvent
@@ -41,7 +42,7 @@ export const checkNip98Event = (
   at: number,
 ): Result<PublicKey, Nip98ValidationFailure> => {
   const { event, url, method } = request
-  const bodyHash = request.bodyHash === EMPTY_BODY_HASH ? undefined : request.bodyHash
+  const bodyHash = request.bodyHash ?? EMPTY_BODY_HASH
   if (event.kind !== KIND_HTTP_AUTH) {
     return failure("kind")
   }
@@ -72,15 +73,11 @@ export const checkNip98Event = (
   if (payloadTag.state === "disagreeing") {
     return failure("payload-disagreeing")
   }
-  // Deliberate: a payload tag is valid only for a non-empty body — see ADR-0011
-  if (bodyHash === undefined && payloadTag.value !== null) {
-    return failure("payload-unexpected")
-  }
-  if (bodyHash !== undefined) {
-    if (payloadTag.value === null) return failure("payload-missing")
-    if (!constantTimeEqual(payloadTag.value, bodyHash)) {
-      return failure("payload-mismatch")
-    }
+  // Deliberate: an empty body needs no payload tag, and a tag on one must state the empty body's hash — see shared ADR-0024
+  if (payloadTag.value === null) {
+    if (bodyHash !== EMPTY_BODY_HASH) return failure("payload-missing")
+  } else if (!constantTimeEqual(payloadTag.value, bodyHash)) {
+    return failure("payload-mismatch")
   }
 
   if (!verifyEventSignature(event)) return failure("signature")

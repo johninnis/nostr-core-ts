@@ -12,14 +12,16 @@ import { decodeUtf8, textEncoder } from "./text-codec.ts"
 /** Prefix marking a NIP-98 or Blossom `Authorization` header value; the bytes after it are base64-encoded JSON. */
 export const NIP98_AUTH_HEADER_PREFIX = "Nostr "
 
-const MAX_AUTH_HEADER_LENGTH = 4096
+const MAX_NIP98_AUTH_HEADER_LENGTH = 4096
+// Deliberate: a Blossom token grows with the blobs it names, so its header has its own bound — see shared ADR-0106
+const MAX_BLOSSOM_AUTH_HEADER_LENGTH = 8000
 
 type Base64Decoder = (encoded: string) => Uint8Array | null
 
 // Deliberate: no header is written that the parser below would refuse for its length — see shared ADR-0106
-const headerWithin4096Characters = (credentials: string): string | null => {
+const headerWithin = (credentials: string, maxLength: number): string | null => {
   const header = `${NIP98_AUTH_HEADER_PREFIX}${credentials}`
-  return header.length > MAX_AUTH_HEADER_LENGTH ? null : header
+  return header.length > maxLength ? null : header
 }
 
 /**
@@ -28,21 +30,26 @@ const headerWithin4096Characters = (credentials: string): string | null => {
  * 4096 characters {@link parseAuthHeader} reads.
  */
 export const encodeAuthHeader = (event: NostrEvent): string | null =>
-  headerWithin4096Characters(base64.encode(textEncoder.encode(serialiseEvent(event))))
+  headerWithin(base64.encode(textEncoder.encode(serialiseEvent(event))), MAX_NIP98_AUTH_HEADER_LENGTH)
 
 /**
  * Encode a signed Blossom authorisation event (kind 24242) as the `Authorization: Nostr <base64url-json>` header value
  * BUD-11 specifies, the JSON being its seven NIP-01 fields ({@link serialiseEvent}) in base64url without padding, or
- * `null` when that header would be longer than the 4096 characters {@link parseBlossomAuthHeader} reads.
+ * `null` when that header would be longer than the 8000 characters {@link parseBlossomAuthHeader} reads (shared
+ * ADR-0106).
  */
 export const encodeBlossomAuthHeader = (event: NostrEvent): string | null =>
-  headerWithin4096Characters(base64urlnopad.encode(textEncoder.encode(serialiseEvent(event))))
+  headerWithin(base64urlnopad.encode(textEncoder.encode(serialiseEvent(event))), MAX_BLOSSOM_AUTH_HEADER_LENGTH)
 
 const hasNostrScheme = (header: string): boolean =>
   header.slice(0, NIP98_AUTH_HEADER_PREFIX.length).toLowerCase() === NIP98_AUTH_HEADER_PREFIX.toLowerCase()
 
-const parseCredentials = (header: string, decode: Base64Decoder): Result<NostrEvent, AuthHeaderDecodeFailure> => {
-  if (header.length > MAX_AUTH_HEADER_LENGTH) {
+const parseCredentials = (
+  header: string,
+  decode: Base64Decoder,
+  maxLength: number,
+): Result<NostrEvent, AuthHeaderDecodeFailure> => {
+  if (header.length > maxLength) {
     return failure("header-too-long")
   }
   if (!hasNostrScheme(header)) {
@@ -69,7 +76,7 @@ const parseCredentials = (header: string, decode: Base64Decoder): Result<NostrEv
  * {@link parseBlossomAuthHeader}.
  */
 export const parseAuthHeader = (header: string): Result<NostrEvent, AuthHeaderDecodeFailure> =>
-  parseCredentials(header, decodeBase64)
+  parseCredentials(header, decodeBase64, MAX_NIP98_AUTH_HEADER_LENGTH)
 
 const decodeBlossomCredentials: Base64Decoder = (encoded) => decodeBase64UrlUnpadded(encoded) ?? decodeBase64(encoded)
 
@@ -78,7 +85,8 @@ const decodeBlossomCredentials: Base64Decoder = (encoded) => decodeBase64UrlUnpa
  * Parse a Blossom `Authorization: Nostr <base64url-json>` header (BUD-11) into its signed event; does not verify the
  * signature. The credentials are read as canonical base64url without padding, the form BUD-11 specifies, or as
  * canonical padded standard base64, the form Blossom clients wrote before it; any other spelling is
- * `header-bad-base64`. Otherwise as {@link parseAuthHeader}.
+ * `header-bad-base64`. A header may be up to 8000 characters long, where a NIP-98 header may be 4096, since a token
+ * grows with the blobs it names (shared ADR-0106). Otherwise as {@link parseAuthHeader}.
  */
 export const parseBlossomAuthHeader = (header: string): Result<NostrEvent, AuthHeaderDecodeFailure> =>
-  parseCredentials(header, decodeBlossomCredentials)
+  parseCredentials(header, decodeBlossomCredentials, MAX_BLOSSOM_AUTH_HEADER_LENGTH)

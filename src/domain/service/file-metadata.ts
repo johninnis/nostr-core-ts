@@ -7,6 +7,7 @@ import { now } from "./timestamp.ts"
 import { InvalidArgumentError } from "../exception/invalid-argument-error.ts"
 import { isLowercaseHex } from "../value-object/brand.ts"
 import { isNonNegativeInteger } from "./guards.ts"
+import { trimSpaceAndTab } from "../value-object/trim.ts"
 
 /**
  * NIP-94 / NIP-92 file metadata. One domain shape for both wire forms: a standalone kind-1063
@@ -80,12 +81,18 @@ const writableFields = (metadata: FileMetadata): ReadonlyArray<readonly [string,
   return toFields(metadata)
 }
 
+// Deliberate: an m is read before its first ";", so a parameter drops itself, not the type — see shared ADR-0072
+const mimeTypeBeforeItsParameters = (mimeType: string): string | null =>
+  parseMimeType(trimSpaceAndTab(mimeType.split(";", 1)[0] ?? ""))
+
 /**
  * Parse a NIP-94 tag list (`["url", …], ["m", …], …`) into a `FileMetadata`; returns `null` without one non-empty
  * `url`. Every other field is optional here, as in a BUD-08 `nip94` blob-descriptor field, and an empty one is kept as
- * the empty string (shared ADR-0079). A `size` is read only when it is decimal digits (NIP-94: "size of file in
- * bytes"), and an `m` only when it is a MIME type (NIP-94: "The MIME types format must be used"), in lowercase. A field
- * repeated with one value is read once, and a field whose tags disagree states nothing (shared ADR-0014).
+ * the empty string (shared ADR-0079). A `size` is read only when it is canonical decimal digits (NIP-94: "size of file
+ * in bytes", shared ADR-0096), and an `m` from its part before the first `;`, without the spaces and tabs around it,
+ * only when that part is a MIME type (NIP-94: "The MIME types format must be used"), in lowercase (shared ADR-0072).
+ * Every `fallback` is kept, in order. Any other field repeated with one value is read once, and a field whose tags
+ * disagree states nothing (shared ADR-0014).
  */
 export const parseFileMetadataTags = (fields: ReadonlyArray<Tag>): FileMetadata | null => {
   const value = (key: string): string | null => soleTagValue(fields, key).value
@@ -95,7 +102,7 @@ export const parseFileMetadataTags = (fields: ReadonlyArray<Tag>): FileMetadata 
   const size = value("size")
   const sizeNumber = size === null ? null : parseDecimalInteger(size)
   const statedMimeType = value("m")
-  const mimeType = statedMimeType === null ? null : parseMimeType(statedMimeType)
+  const mimeType = statedMimeType === null ? null : mimeTypeBeforeItsParameters(statedMimeType)
   const hash = value("x")
   const originalHash = value("ox")
   const dimensions = value("dim")
@@ -141,18 +148,18 @@ export const parseFileMetadataEvent = (event: NostrEvent): FileEventMetadata | n
   return metadata !== null && statesEventFields(metadata) ? metadata : null
 }
 
-const describesTheUrl = (fields: ReadonlyArray<readonly [string, string]>): boolean =>
-  fields.some(([key]) => key !== "url")
+const describesTheUrl = (fields: ReadonlyArray<Tag>): boolean => fields.some(([key]) => key !== "url")
 
 /**
  * Parse a single NIP-92 `imeta` tag into a `FileMetadata`; returns `null` if `tag` isn't an `imeta` tag, carries no
- * `url`, or carries no other field this reads (NIP-92: "Each `imeta` tag MUST have a `url`, and at least one other
- * field"). A field it drops — a `size` that is not a decimal, an `m` that is not a MIME type, a field it does not model
- * — is not that other field, so it reads back exactly the tags {@link buildImetaTag} writes.
+ * `url`, or carries no other field (NIP-92: "Each `imeta` tag MUST have a `url`, and at least one other field"). Any
+ * field counts, a field it drops or does not model included, so a tag's validity does not depend on what this reads;
+ * what it reads of the tag is the fields it models (shared ADR-0072).
  */
 export const parseImetaTag = (tag: Tag): FileMetadata | null => {
-  const metadata = tag[0] === "imeta" ? parseFileMetadataTags(imetaFields(tag)) : null
-  return metadata !== null && describesTheUrl(toFields(metadata)) ? metadata : null
+  const fields = tag[0] === "imeta" ? imetaFields(tag) : []
+  // Deliberate: valid with a url and any other field, as NIP-92 requires — see shared ADR-0072
+  return describesTheUrl(fields) ? parseFileMetadataTags(fields) : null
 }
 
 /** Parse every NIP-92 `imeta` tag in `tags` into `FileMetadata`, skipping any that {@link parseImetaTag} refuses. */

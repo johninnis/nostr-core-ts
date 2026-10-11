@@ -3,9 +3,9 @@
  *
  * `@innis/nostr-core` is the contracts and protocol-primitives layer that every Innis library builds on. It ships
  * **only protocol-spec behaviour** — branded primitives, event builders, signature verification, NIP-19 bech32, NIP-17
- * gift-wrap construction, NIP-98 HTTP auth — plus the `Signer` and `HttpClient` port types that downstream packages
- * implement. Application-policy concerns (relay-pool strategy, DM persistence, refresh schedules) live in consumers,
- * not here.
+ * gift-wrap construction, NIP-98 HTTP auth, NIP-29 groups — plus the `Signer` and `HttpClient` port types that
+ * downstream packages implement. Application-policy concerns (relay-pool strategy, DM persistence, refresh schedules)
+ * live in consumers, not here.
  *
  * @example
  * ```ts
@@ -35,7 +35,8 @@
  *     `Nip98ValidationFailure`, `RumourParseFailure` …)
  *   - `src/domain/exception/mod.ts` — thrown `*Error` faults under the abstract root `NostrError`
  *     (`InvalidArgumentError`, `InvariantError`, the NIP-04/-44 codec errors)
- *   - `src/domain/service/mod.ts` — pure domain services (bech32, builders, filters, JSON, hex, rumours, NIP-98 …)
+ *   - `src/domain/service/mod.ts` — pure domain services (bech32, builders, filters, JSON, hex, rumours, NIP-98,
+ *     NIP-29 …)
  *   - `src/application/failure/mod.ts` — `HttpRequestFailure`, `MalformedBodyFailure`, `JsonFetchFailure`,
  *     `JsonDecryptFailure`, `PrivateEntriesFailure`, `GiftWrapUnwrapFailure`
  *   - `src/application/port/mod.ts` — the `HttpClient` and `Nip98ReplayGuard` ports

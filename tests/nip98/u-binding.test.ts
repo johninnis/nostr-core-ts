@@ -45,7 +45,7 @@ const U_BINDING: ReadonlyArray<readonly [string, string, string, Nip98Validation
     "accepted",
   ],
   ["a fragment", "https://x.example/a#frag", "https://x.example/a", "accepted"],
-  ["credentials", "https://user:pw@x.example/a", "https://x.example/a", "accepted"],
+  ["credentials", "https://user:pw@x.example/a", "https://x.example/a", "u-malformed"],
   ["no path against the root path", "https://x.example", "https://x.example/", "accepted"],
   ["another port on both sides", "https://x.example:8443/a", "https://x.example:8443/a", "accepted"],
 ]

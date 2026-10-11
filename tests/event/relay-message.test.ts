@@ -1,5 +1,10 @@
 import { assertEquals } from "@std/assert"
-import { parseReasonPrefix, parseRelayMessage } from "../../src/domain/service/relay-message.ts"
+import {
+  eoseHasHint,
+  type EoseMessage,
+  parseReasonPrefix,
+  parseRelayMessage,
+} from "../../src/domain/service/relay-message.ts"
 import { authChallengeFixture, eventIdFixture, subscriptionIdFixture } from "../../testing.ts"
 
 const validEvent = {
@@ -29,11 +34,51 @@ Deno.test("parseRelayMessage - EVENT is null when the event payload is invalid",
   assertEquals(parseRelayMessage(JSON.stringify(["EVENT", "sub-1", { id: "nope" }])), null)
 })
 
-Deno.test("parseRelayMessage - EOSE carries the subscription id", () => {
+Deno.test("parseRelayMessage - EOSE carries the subscription id and no hints", () => {
   assertEquals(parseRelayMessage(JSON.stringify(["EOSE", "sub-1"])), {
     type: "EOSE",
     subscriptionId: subscriptionIdFixture("sub-1"),
+    hints: [],
   })
+})
+
+Deno.test("parseRelayMessage - EOSE carries NIP-67's hint array (shared ADR-0091)", () => {
+  const eose = parseRelayMessage(JSON.stringify(["EOSE", "sub-1", ["auth", "finish"]]))
+  assertEquals(eose?.type === "EOSE" ? eose.hints : "not EOSE", ["auth", "finish"])
+})
+
+Deno.test("parseRelayMessage - EOSE keeps a hint NIP-67 does not define (shared ADR-0091)", () => {
+  const eose = parseRelayMessage(JSON.stringify(["EOSE", "sub-1", ["someday"]]))
+  assertEquals(eose?.type === "EOSE" ? eose.hints : "not EOSE", ["someday"])
+})
+
+for (const third of ["auth", ["auth", 1], { 0: "auth" }]) {
+  Deno.test(`parseRelayMessage - EOSE ignores a third element ${JSON.stringify(third)}, no array of strings`, () => {
+    const eose = parseRelayMessage(JSON.stringify(["EOSE", "sub-1", third]))
+    assertEquals(eose?.type === "EOSE" ? eose.hints : "not EOSE", [])
+  })
+}
+
+const eoseHinting = (hints: ReadonlyArray<string>): EoseMessage => ({
+  type: "EOSE",
+  subscriptionId: subscriptionIdFixture("sub-1"),
+  hints,
+})
+
+Deno.test("eoseHasHint - true for a NIP-67 hint the EOSE carries", () => {
+  assertEquals(eoseHasHint(eoseHinting(["finish", "auth"]), "auth"), true)
+})
+
+Deno.test("eoseHasHint - false for a NIP-67 hint the EOSE does not carry", () => {
+  assertEquals(eoseHasHint(eoseHinting(["finish", "more"]), "auth"), false)
+})
+
+Deno.test("eoseHasHint - false for an EOSE that carries no hints", () => {
+  assertEquals(eoseHasHint(eoseHinting([]), "finish"), false)
+})
+
+Deno.test("eoseHasHint - a hint is matched exactly, so a differently cased word is not it", () => {
+  assertEquals(eoseHasHint(eoseHinting(["Auth"]), "auth"), false)
 })
 
 Deno.test("parseRelayMessage - EOSE is null when the subscription id is not a string", () => {
@@ -70,9 +115,9 @@ Deno.test("parseRelayMessage - OK false without a prefix is an error, the NIP-01
   })
 })
 
-Deno.test("parseRelayMessage - OK false with a prefix NIP-01 does not standardise is an error", () => {
-  const msg = parseRelayMessage(JSON.stringify(["OK", eventIdHex, false, "unsupported: kind 4"]))
-  assertEquals(msg?.type === "OK" ? [msg.reason, msg.message] : null, ["error", "unsupported: kind 4"])
+Deno.test("parseRelayMessage - OK false with a prefix no NIP uses is an error", () => {
+  const msg = parseRelayMessage(JSON.stringify(["OK", eventIdHex, false, "teapot: kind 4"]))
+  assertEquals(msg?.type === "OK" ? [msg.reason, msg.message] : null, ["error", "teapot: kind 4"])
 })
 
 Deno.test("parseRelayMessage - OK true without a prefix has no reason", () => {
@@ -110,8 +155,8 @@ Deno.test("parseRelayMessage - CLOSED without a prefix keeps its message and is 
   })
 })
 
-Deno.test("parseRelayMessage - CLOSED with a prefix NIP-01 does not standardise is an error", () => {
-  const msg = parseRelayMessage(JSON.stringify(["CLOSED", "sub-1", "unsupported: filter contains unknown elements"]))
+Deno.test("parseRelayMessage - CLOSED with a prefix no NIP uses is an error", () => {
+  const msg = parseRelayMessage(JSON.stringify(["CLOSED", "sub-1", "teapot: short and stout"]))
   assertEquals(msg?.type === "CLOSED" ? msg.reason : null, "error")
 })
 
@@ -227,6 +272,7 @@ Deno.test("parseRelayMessage - a subscription id may be at most 64 characters (N
   assertEquals(parseRelayMessage(JSON.stringify(["EOSE", "s".repeat(64)])), {
     type: "EOSE",
     subscriptionId: subscriptionIdFixture("s".repeat(64)),
+    hints: [],
   })
   assertEquals(parseRelayMessage(JSON.stringify(["EOSE", "s".repeat(65)])), null)
   assertEquals(parseRelayMessage(JSON.stringify(["CLOSED", "s".repeat(65), "error: x"])), null)
@@ -238,10 +284,11 @@ Deno.test("parseRelayMessage - a subscription id counts characters, not UTF-16 u
   assertEquals(parseRelayMessage(JSON.stringify(["EOSE", id])), {
     type: "EOSE",
     subscriptionId: subscriptionIdFixture(id),
+    hints: [],
   })
 })
 
-Deno.test("parseReasonPrefix - reads each machine-readable prefix NIP-01 and NIP-42 define", () => {
+Deno.test("parseReasonPrefix - reads each machine-readable prefix the NIPs use (shared ADR-0031)", () => {
   const prefixes = [
     "duplicate",
     "pow",
@@ -251,9 +298,21 @@ Deno.test("parseReasonPrefix - reads each machine-readable prefix NIP-01 and NIP
     "restricted",
     "mute",
     "error",
+    "unsupported",
     "auth-required",
+    "info",
   ] as const
   assertEquals(prefixes.map((prefix) => parseReasonPrefix(`${prefix}: detail`)), [...prefixes])
+})
+
+Deno.test("parseRelayMessage - a CLOSED headed unsupported: has that reason (NIP-01 example, shared ADR-0031)", () => {
+  const closed = parseRelayMessage(JSON.stringify(["CLOSED", "sub1", "unsupported: filter contains unknown elements"]))
+  assertEquals(closed?.type === "CLOSED" ? closed.reason : "not CLOSED", "unsupported")
+})
+
+Deno.test("parseRelayMessage - an accepted OK headed info: has that reason (NIP-43 example, shared ADR-0031)", () => {
+  const ok = parseRelayMessage(JSON.stringify(["OK", eventIdHex, true, "info: welcome to wss://relay.bunk.skunk!"]))
+  assertEquals(ok?.type === "OK" ? ok.reason : "not OK", "info")
 })
 
 Deno.test("parseReasonPrefix - null for a message without a known prefix", () => {

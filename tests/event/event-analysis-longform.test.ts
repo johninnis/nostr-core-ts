@@ -69,12 +69,20 @@ Deno.test("analyseEvent - longform empty title and summary read as empty strings
   assertEquals([longform.title, longform.summary], ["", ""])
 })
 
-Deno.test("analyseEvent - longform image is read in the one HttpUrl form (shared ADR-0081)", () => {
+Deno.test("analyseEvent - longform image is kept exactly as written (shared ADR-0079)", () => {
   const raw = makeEvent({ kind: KIND_LONGFORM_CONTENT, tags: [["image", "HTTPS://Example.com:443/i.jpg#f"]] })
-  assertEquals(longformOf(raw).image, "https://example.com/i.jpg")
+  assertEquals(longformOf(raw).image, "HTTPS://Example.com:443/i.jpg#f")
 })
 
-for (const image of ["", "ftp://example.com/i.jpg", "data:image/png;base64,AAAA", "not a url"]) {
+for (
+  const image of [
+    "",
+    "ftp://example.com/i.jpg",
+    "data:image/png;base64,AAAA",
+    "not a url",
+    "https://u@example.com/i.jpg",
+  ]
+) {
   Deno.test(`analyseEvent - longform image ${JSON.stringify(image)} is not an http(s) URL, so it is dropped`, () => {
     const raw = makeEvent({ kind: KIND_LONGFORM_CONTENT, tags: [["image", image]] })
     assertEquals(longformOf(raw).image, null)

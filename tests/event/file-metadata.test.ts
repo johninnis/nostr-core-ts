@@ -148,12 +148,24 @@ Deno.test("parseImetaTag - an entry without a space is not a field", () => {
   assertEquals(parseImetaTag(["imeta", "url https://example.com/a.jpg", "garbage"]), null)
 })
 
-Deno.test("parseImetaTag - refuses a tag whose only other field is one it does not model, as buildImetaTag writes none", () => {
-  assertEquals(parseImetaTag(["imeta", "url https://example.com/a.jpg", "service nip96"]), null)
-})
+for (
+  const [what, fields] of [
+    ["a size that is not a decimal integer", ["size abc"]],
+    ["a MIME type that is not one", ["m not-a-mime-type"]],
+    ["two disagreeing dimensions", ["dim 1x1", "dim 2x2"]],
+    ["a NIP-94 field it does not model", ["service nip96"]],
+    ["a field no NIP defines", ["note hello"]],
+  ] as const
+) {
+  Deno.test(`parseImetaTag - reads a tag whose only other field is ${what} as its url (shared ADR-0072)`, () => {
+    assertEquals(parseImetaTag(["imeta", "url https://example.com/a.jpg", ...fields]), {
+      url: "https://example.com/a.jpg",
+    })
+  })
+}
 
-Deno.test("parseImetaTag - refuses a tag whose only other field it drops (NIP-92 MUST)", () => {
-  assertEquals(parseImetaTag(["imeta", "url https://example.com/a.jpg", "size abc"]), null)
+Deno.test("parseImetaTag - refuses a tag whose only other field is a second url (NIP-92 MUST)", () => {
+  assertEquals(parseImetaTag(["imeta", "url https://example.com/a.jpg", "url https://example.com/a.jpg"]), null)
 })
 
 Deno.test("parseImetaTag - reads the NIP-92 example", () => {
@@ -276,9 +288,42 @@ Deno.test("parseFileMetadataTags - reads no MIME type from a value that is not o
   })
 })
 
-Deno.test("parseImetaTag - reads no MIME type from a value with a parameter", () => {
-  const tag: Tag = ["imeta", "url https://example.com/a.jpg", "m text/plain; charset=utf-8", "alt a picture"]
-  assertEquals(parseImetaTag(tag)?.mimeType, undefined)
+Deno.test("parseImetaTag - reads the MIME type before a parameter (shared ADR-0072)", () => {
+  const tag: Tag = ["imeta", "url https://example.com/a.jpg", "m text/plain; charset=utf-8"]
+  assertEquals(parseImetaTag(tag)?.mimeType, "text/plain")
+})
+
+Deno.test("parseFileMetadataTags - reads the MIME type before a parameter, in lowercase (shared ADR-0072)", () => {
+  const fields: ReadonlyArray<Tag> = [["url", "https://example.com/a.jpg"], ["m", "Text/Plain;charset=utf-8"]]
+  assertEquals(parseFileMetadataTags(fields)?.mimeType, "text/plain")
+})
+
+Deno.test("parseFileMetadataTags - reads the MIME type without the spaces and tabs around it (shared ADR-0072)", () => {
+  const fields: ReadonlyArray<Tag> = [["url", "https://example.com/a.jpg"], ["m", " \ttext/plain \t; charset=utf-8"]]
+  assertEquals(parseFileMetadataTags(fields)?.mimeType, "text/plain")
+})
+
+Deno.test("parseFileMetadataTags - reads no MIME type around which a newline stands", () => {
+  const fields: ReadonlyArray<Tag> = [["url", "https://example.com/a.jpg"], ["m", "text/plain\n"]]
+  assertEquals(parseFileMetadataTags(fields)?.mimeType, undefined)
+})
+
+Deno.test("parseFileMetadataTags - reads no MIME type from a parameter alone", () => {
+  const fields: ReadonlyArray<Tag> = [["url", "https://example.com/a.jpg"], ["m", "; charset=utf-8"]]
+  assertEquals(parseFileMetadataTags(fields)?.mimeType, undefined)
+})
+
+Deno.test("parseFileMetadataTags - keeps every fallback, in order (shared ADR-0072)", () => {
+  const fields: ReadonlyArray<Tag> = [["url", "https://example.com/a.jpg"], ["fallback", "https://b.example/a.jpg"], [
+    "fallback",
+    "https://a.example/a.jpg",
+  ]]
+  assertEquals(parseFileMetadataTags(fields)?.fallbacks, ["https://b.example/a.jpg", "https://a.example/a.jpg"])
+})
+
+Deno.test("parseFileMetadataEvent - reads an event whose m carries a parameter (shared ADR-0072)", () => {
+  const event = makeEvent(KIND_FILE_METADATA, [...withoutTag("m"), ["m", "image/jpeg; charset=binary"]])
+  assertEquals(parseFileMetadataEvent(event)?.mimeType, "image/jpeg")
 })
 
 Deno.test('parseFileMetadataEvent - refuses an m that is not a MIME type (NIP-94: "The MIME types format must be used")', () => {

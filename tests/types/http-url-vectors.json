@@ -59,15 +59,15 @@
     ],
     [
       "https://user:pw@x.com/a",
-      "https://x.com/a"
+      null
     ],
     [
       "https://user@x.com/a",
-      "https://x.com/a"
+      null
     ],
     [
       "https://@x.com/a",
-      "https://x.com/a"
+      null
     ],
     [
       "ftp://x.com/a",
@@ -271,11 +271,11 @@
     ],
     [
       "https://a:b:c@x.com/a",
-      "https://x.com/a"
+      null
     ],
     [
       "https://a@b@x.com/a",
-      "https://x.com/a"
+      null
     ],
     [
       "https://x.com/a?b#c?d",
@@ -335,7 +335,7 @@
     ],
     [
       "https://u:p@X.com:443/a?b#c",
-      "https://x.com/a?b"
+      null
     ],
     [
       "https://x.com/ ",

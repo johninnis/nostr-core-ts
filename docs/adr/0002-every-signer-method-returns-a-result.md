@@ -14,7 +14,7 @@ But every way a remote signer says "no" is anticipated: nobody is signed in to t
 
 `getPublicKey` returns `Promise<Result<PublicKey, SignerFailure>>` and `signEvent` returns `Promise<Result<NostrEvent, SignerFailure>>`, like the cipher methods. `SignerFailure` is `{ type, message }` with `type` one of `no-signer`, `disconnected`, `rejected`, `pubkey-mismatch`, `public-key-failed`, `sign-failed`, `decrypt-failed`, `encrypt-failed`; `message` is the signer's words for display.
 
-A signed event whose pubkey is not the caller's expected identity is `pubkey-mismatch`, returned by `checkPubkeyMatches`: the key that signed is chosen by software outside this library (the user switching accounts in the extension or the bunker), so a mismatch is the peer's answer, not a broken invariant here.
+A signed event whose pubkey is not the caller's expected identity is `pubkey-mismatch`, returned by `checkPubkeyMatches`: the key that signed is chosen by software outside this library (the user switching accounts in the extension or the bunker), so a mismatch is the peer's answer, not a broken invariant here. A signed event that is not the template the signer was sent, its `kind`, `content`, `created_at` or `tags` changed, is `sign-failed`, returned by `checkSignedMatchesTemplate` (shared ADR-0049), for the same reason.
 
 A local signer's `getPublicKey` and `signEvent` always return `ok`. A throw from its Schnorr primitive is a broken primitive and propagates.
 

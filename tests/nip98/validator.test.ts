@@ -179,21 +179,6 @@ Deno.test('validate - refuses a method tag in another case, since RFC 9110 says 
   assertEquals(result, failure("method-mismatch"))
 })
 
-Deno.test("validate - rejects payload tag when no body hash provided", async () => {
-  const { signer } = makeKeypair()
-  const validator = createNip98Validator(makeReplayGuard(), DEFAULT_TIMESTAMP_TOLERANCE_SECONDS, () => NOW)
-  const bodyHash = sha256Hex("hello")
-  const event = await signAuth(signer, {
-    url: RELAY_URL,
-    method: "POST",
-    payloadHash: bodyHash,
-  })
-
-  const result = await validator.validate({ event, url: RELAY_URL, method: "POST" })
-  assertEquals(result.success, false)
-  if (!result.success) assertEquals(result.error, "payload-unexpected")
-})
-
 Deno.test("validate - rejects missing payload tag when body hash is provided", async () => {
   const { signer } = makeKeypair()
   const validator = createNip98Validator(makeReplayGuard(), DEFAULT_TIMESTAMP_TOLERANCE_SECONDS, () => NOW)
@@ -382,20 +367,6 @@ Deno.test("validate - ignores an expiration value that is not a timestamp", asyn
   assertEquals(result.success, true)
 })
 
-Deno.test("validateAuthHeader - rejects a payload tag carrying the empty-string hash on an empty body", async () => {
-  const { signer } = makeKeypair()
-  const validator = createNip98Validator(makeReplayGuard(), DEFAULT_TIMESTAMP_TOLERANCE_SECONDS, () => NOW)
-  const event = await signAuth(signer, {
-    url: RELAY_URL,
-    method: "POST",
-    payloadHash: sha256Hex(""),
-  })
-  const header = "Nostr " + base64.encode(new TextEncoder().encode(JSON.stringify(event)))
-
-  const result = await validator.validateAuthHeader({ authHeader: header, url: RELAY_URL, method: "POST", body: "" })
-  assertEquals(!result.success && result.error, "payload-unexpected")
-})
-
 const validateTags = async (
   tags: Array<[string, ...string[]]>,
   bodyHash?: string,
@@ -448,26 +419,4 @@ Deno.test("validate - refuses payload tags that state different values", async (
     ]], hash),
     "payload-disagreeing",
   )
-})
-
-Deno.test("validate - an empty payload tag is still a payload tag, so it is refused without a body", async () => {
-  assertEquals(
-    await validateTags([["u", "https://relay.example/x"], ["method", "POST"], ["payload", ""]]),
-    "payload-unexpected",
-  )
-})
-
-Deno.test("validate - the empty body's hash is no body, so it admits no payload tag (shared ADR-0024)", async () => {
-  const emptyBodyHash = sha256Hex("")
-  assertEquals(
-    await validateTags(
-      [["u", "https://relay.example/x"], ["method", "POST"], ["payload", emptyBodyHash]],
-      emptyBodyHash,
-    ),
-    "payload-unexpected",
-  )
-})
-
-Deno.test("validate - the empty body's hash is no body, so it demands no payload tag (shared ADR-0024)", async () => {
-  assertEquals(await validateTags([["u", "https://relay.example/x"], ["method", "POST"]], sha256Hex("")), true)
 })

@@ -96,9 +96,12 @@ Deno.test("buildRepost - a NIP-70 protected event is reposted with empty content
   assertEquals(buildRepost(signed({ kind: KIND_TEXT_NOTE, tags: [["-"]] }), RELAY).content, "")
 })
 
-Deno.test("buildRepost - an event whose dash tag carries a value is not protected and is embedded", () => {
-  const target = signed({ kind: KIND_TEXT_NOTE, tags: [["-", "x"]] })
-  assertEquals(JSON.parse(buildRepost(target, RELAY).content).id, target.id)
+Deno.test("buildRepost - an event whose dash tag carries a value is protected and not embedded (shared ADR-0078)", () => {
+  assertEquals(buildRepost(signed({ kind: KIND_TEXT_NOTE, tags: [["-", "x"]] }), RELAY).content, "")
+})
+
+Deno.test("buildRepost - an event whose dash tag carries an empty value is protected and not embedded (shared ADR-0078)", () => {
+  assertEquals(buildRepost(signed({ kind: KIND_TEXT_NOTE, tags: [["-", ""]] }), RELAY).content, "")
 })
 
 Deno.test("buildRepost - any other kind is a kind 16 generic repost with a k tag", () => {

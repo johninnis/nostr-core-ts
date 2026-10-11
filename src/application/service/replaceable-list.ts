@@ -5,6 +5,7 @@ import { ok } from "../../domain/value-object/result.ts"
 import type { PeerCipher } from "../../domain/service/peer-cipher.ts"
 import { kindCategory } from "../../domain/value-object/kinds.ts"
 import { now } from "../../domain/service/timestamp.ts"
+import { tagsEqual } from "../../domain/service/tags.ts"
 import type { SignerFailure } from "../../domain/failure/signer-failure.ts"
 import { createJsonCipher } from "./json-crypto.ts"
 import { isValidAddressableRef } from "../../domain/value-object/addressable-ref.ts"
@@ -71,13 +72,6 @@ export interface BuildReplaceableListEventInput extends ListTarget {
   readonly current: ListContents
   readonly modifyTags: (current: ReadonlyArray<Tag>) => ReadonlyArray<Tag>
 }
-
-const tagsEqual = (a: ReadonlyArray<Tag>, b: ReadonlyArray<Tag>): boolean =>
-  a.length === b.length &&
-  a.every((tag, index) => {
-    const other = b[index]
-    return other !== undefined && tag.length === other.length && tag.every((value, i) => value === other[i])
-  })
 
 /**
  * Outcome of `buildReplaceableListEvent`: `unchanged` when `modifyTags` returned the same tags, else the next template

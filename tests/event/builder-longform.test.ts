@@ -2,7 +2,7 @@ import { assertEquals, assertThrows } from "@std/assert"
 import { InvalidArgumentError } from "../../src/domain/exception/invalid-argument-error.ts"
 import { buildLongform } from "../../src/domain/service/builder.ts"
 import { KIND_LONGFORM_CONTENT, KIND_LONGFORM_CONTENT_DRAFT } from "../../src/domain/value-object/kinds.ts"
-import { httpUrlFixture } from "../../testing.ts"
+import { webUrlFixture } from "../../testing.ts"
 
 Deno.test("buildLongform - emits kind, content, and d tag", () => {
   const event = buildLongform({ kind: KIND_LONGFORM_CONTENT, dTag: "my-slug", content: "body" })
@@ -18,7 +18,7 @@ Deno.test("buildLongform - includes title, summary, image when present", () => {
     content: "c",
     title: "T",
     summary: "S",
-    image: httpUrlFixture("https://example.com/i.png"),
+    image: webUrlFixture("https://example.com/i.png"),
   })
   assertEquals(event.tags.find((t) => t[0] === "title")?.[1], "T")
   assertEquals(event.tags.find((t) => t[0] === "summary")?.[1], "S")
@@ -39,12 +39,18 @@ Deno.test("buildLongform - writes an empty title and summary as empty tags (shar
   ])
 })
 
-Deno.test("buildLongform - refuses, at compile time, an image that is not an HttpUrl", () => {
+Deno.test("buildLongform - writes the image exactly as given (shared ADR-0079)", () => {
+  const image = webUrlFixture("HTTPS://Example.com:443/i.png#x")
+  const event = buildLongform({ kind: KIND_LONGFORM_CONTENT, dTag: "s", content: "c", image })
+  assertEquals(event.tags.find((t) => t[0] === "image")?.[1], "HTTPS://Example.com:443/i.png#x")
+})
+
+Deno.test("buildLongform - refuses, at compile time, an image that is not a WebUrl", () => {
   const input: Parameters<typeof buildLongform>[0] = {
     kind: KIND_LONGFORM_CONTENT,
     dTag: "s",
     content: "c",
-    // @ts-expect-error an image is an HttpUrl, so a plain string is refused
+    // @ts-expect-error an image is a WebUrl, so a plain string is refused
     image: "https://example.com/i.png",
   }
   assertEquals(input.dTag, "s")

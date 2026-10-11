@@ -34,6 +34,10 @@ Deno.test("parseHttpUrl - refuses a scheme other than http or https", () => {
   assertEquals(parseHttpUrl("ftp://x.example/a"), null)
 })
 
+Deno.test("parseHttpUrl - refuses a scheme named like a property every JavaScript object has", () => {
+  assertEquals(parseHttpUrl("constructor://x.example/a"), null)
+})
+
 Deno.test("parseHttpUrl - an IP literal with an IPv4 address before its :: is no IPv6 address", () => {
   assertEquals(parseHttpUrl("https://[1.2.3.4::]/"), null)
 })

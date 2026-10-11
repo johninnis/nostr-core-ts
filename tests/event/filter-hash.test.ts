@@ -80,6 +80,14 @@ Deno.test("hashFilters - sorts astral tag values identically to PHP", () => {
   )
 })
 
+Deno.test("hashFilters - sorts object keys by code point, as PHP sorts them by byte (shared ADR-0006)", () => {
+  const privateUseBesideAstral: NostrFilter = JSON.parse('{"#\\ud83d\\ude00":["y"],"#\\ue000":["x"]}')
+  assertEquals(
+    hashFilters([privateUseBesideAstral]),
+    "62face6cf82d6109dc6fb11ddd40019630ed406d8cfba55365f8115f772c022d",
+  )
+})
+
 Deno.test("hashFilters - preserves duplicate array elements (equal sort keys)", () => {
   assertNotEquals(hashFilters([{ authors: [authorA, authorA] }]), hashFilters([{ authors: [authorA] }]))
 })

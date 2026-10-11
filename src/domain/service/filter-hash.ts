@@ -6,6 +6,17 @@ import { sha256Hex } from "./sha256.ts"
 const encodeCanonical = (value: unknown): string =>
   JSON.stringify(value).replace(/[\u0080-\uffff]/g, (unit) => `\\u${unit.charCodeAt(0).toString(16).padStart(4, "0")}`)
 
+const codePointsOf = (text: string): ReadonlyArray<number> =>
+  Array.from(text, (character) => character.codePointAt(0) ?? 0)
+
+// Deliberate: code point order is UTF-8 byte order, as PHP sorts keys, which UTF-16 order is not — see shared ADR-0006
+const byCodePoint = (a: string, b: string): number => {
+  const left = codePointsOf(a)
+  const right = codePointsOf(b)
+  const differing = left.findIndex((point, at) => point !== right[at])
+  return differing === -1 ? left.length - right.length : (left[differing] ?? 0) - (right[differing] ?? -1)
+}
+
 const canonicalise = (value: unknown): unknown => {
   if (Array.isArray(value)) {
     return value
@@ -16,7 +27,7 @@ const canonicalise = (value: unknown): unknown => {
   }
   if (isRecord(value)) {
     const canonical: Record<string, unknown> = {}
-    for (const key of Object.keys(value).sort()) canonical[key] = canonicalise(value[key])
+    for (const key of Object.keys(value).sort(byCodePoint)) canonical[key] = canonicalise(value[key])
     return canonical
   }
   return value

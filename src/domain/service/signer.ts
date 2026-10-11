@@ -17,10 +17,11 @@ export type SignerKind = "local" | "extension" | "bunker"
 
 /**
  * The signing port every signer implementation satisfies — NIP-07, NIP-46 and `createLocalSigner` alike. Every method
- * returns a `Result`: a decline, a missing or disconnected signer, a signer that signed as another key, or a peer that
- * answered badly is a `Failure(SignerFailure)`, never a throw. A template that is not a NIP-01 event is the caller's
- * fault, not an outcome: every implementation runs it through `buildUnsignedEvent` before anything signs or is asked
- * to, so `signEvent` rejects with `InvalidArgumentError` the same way whichever signer it is.
+ * returns a `Result`: a decline, a missing or disconnected signer, a signer that signed as another key or signed
+ * something other than the template it was sent, or a peer that answered badly is a `Failure(SignerFailure)`, never a
+ * throw. A template that is not a NIP-01 event is the caller's fault, not an outcome: every implementation runs it
+ * through `buildUnsignedEvent` before anything signs or is asked to, so `signEvent` rejects with `InvalidArgumentError`
+ * the same way whichever signer it is.
  */
 export interface Signer extends PeerCipher {
   readonly kind: SignerKind

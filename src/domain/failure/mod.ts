@@ -1,6 +1,8 @@
 export type { AuthHeaderDecodeFailure } from "./auth-header-decode-failure.ts"
 export type { JsonParseFailure } from "./json-parse-failure.ts"
 export type { Nip98ValidationFailure } from "./nip98-validation-failure.ts"
+export type { NutzapDleqFailure } from "./nutzap-dleq-failure.ts"
+export type { NutzapVerificationFailure } from "./nutzap-verification-failure.ts"
 export type { RumourParseFailure } from "./rumour-parse-failure.ts"
 export type { SignerFailure } from "./signer-failure.ts"
 export type { ZapReceiptVerificationFailure } from "./zap-receipt-verification-failure.ts"

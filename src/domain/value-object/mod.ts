@@ -26,6 +26,8 @@ export { isValidPublicKey, parsePublicKey } from "./public-key.ts"
 
 export type { HttpUrl } from "./http-url.ts"
 export { isValidHttpUrl, parseHttpUrl } from "./http-url.ts"
+export type { WebUrl } from "./web-url.ts"
+export { isValidWebUrl, parseWebUrl } from "./web-url.ts"
 
 export type { RelayUrl } from "./relay-url.ts"
 export { isValidRelayUrl, parseRelayUrl, toRelayUrls, wsToHttp } from "./relay-url.ts"

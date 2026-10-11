@@ -21,12 +21,14 @@ import type { PublicKey } from "../value-object/public-key.ts"
 import type { ChatRoom } from "../value-object/chat-room.ts"
 import type { RelayUrl } from "../value-object/relay-url.ts"
 import type { HttpUrl } from "../value-object/http-url.ts"
+import type { WebUrl } from "../value-object/web-url.ts"
 import type { KIND_LONGFORM_CONTENT, KIND_LONGFORM_CONTENT_DRAFT } from "../value-object/kinds.ts"
 import { now } from "./timestamp.ts"
 import { buildRumour } from "./rumour.ts"
 import { InvalidArgumentError } from "../exception/invalid-argument-error.ts"
 import { isNonNegativeInteger } from "./guards.ts"
 import { withContentTags } from "./content-tags.ts"
+import { hasTagNamed } from "./tags.ts"
 import { normaliseHashtag } from "./hashtag.ts"
 import { DEFAULT_REACTION } from "./reaction.ts"
 import { replyTargetRef } from "./event-analysis.ts"
@@ -57,7 +59,8 @@ const coordinateOf = (event: Rumour): string | null => {
 const addressableCoordinateOf = (event: Rumour): string | null =>
   kindCategory(event.kind) === "addressable" ? coordinateOf(event) : null
 
-const isProtected = (event: Rumour): boolean => event.tags.some((tag) => tag[0] === "-" && tag.length === 1)
+// Deliberate: any tag named "-" protects the event, whatever follows the name — see shared ADR-0078
+const isProtected = (event: Rumour): boolean => hasTagNamed(event.tags, "-")
 
 /**
  * Build a NIP-18 repost of `target`, found on `relay`: kind 6 for a kind 1 note, otherwise a kind 16 generic repost
@@ -103,10 +106,11 @@ export const buildReaction = (
 }
 
 /**
- * Build `author`'s NIP-09 kind 5 deletion request for `target`, which must be a published event of theirs: an `a` tag
- * with its coordinate for a replaceable or addressable event, which asks relays to delete every version up to the
- * request's `created_at`, otherwise an `e` tag with its id, and a `k` tag naming its kind (NIP-09: requests "SHOULD
- * include a `k` tag"). Throws `InvalidArgumentError` when `target` is another author's event: a deletion request names
+ * Build `author`'s NIP-09 kind 5 deletion request for `target`, which must be a published event of theirs: an `e` tag
+ * with its id; for a replaceable or addressable event also an `a` tag with its coordinate, which asks relays to delete
+ * every version up to the request's `created_at`, while the `e` tag lets a client checking `#e` for the version it
+ * shows find the request (shared ADR-0016); and a `k` tag naming its kind (NIP-09: requests "SHOULD include a `k`
+ * tag"). Throws `InvalidArgumentError` when `target` is another author's event: a deletion request names
  * only events "that have an identical `pubkey` as the deletion request" (NIP-09, shared ADR-0086). Throws it too when
  * `target` is itself a deletion request: "Publishing a deletion request event against a deletion request has no
  * effect" (NIP-09, shared ADR-0093), so the request would be a no-op.
@@ -119,8 +123,13 @@ export const buildDeletion = (author: PublicKey, target: NostrEvent): UnsignedEv
     throw new InvalidArgumentError("A NIP-09 deletion request against a deletion request has no effect")
   }
   const coordinate = coordinateOf(target)
-  const reference: Tag = coordinate === null ? ["e", target.id] : ["a", coordinate]
-  return { kind: KIND_EVENT_DELETION, created_at: now(), tags: [reference, ["k", String(target.kind)]], content: "" }
+  const coordinateTags: ReadonlyArray<Tag> = coordinate === null ? [] : [["a", coordinate]]
+  return {
+    kind: KIND_EVENT_DELETION,
+    created_at: now(),
+    tags: [["e", target.id], ...coordinateTags, ["k", String(target.kind)]],
+    content: "",
+  }
 }
 
 /**
@@ -214,7 +223,7 @@ interface BuildLongformInput {
   readonly content: string
   readonly title?: string
   readonly summary?: string
-  readonly image?: HttpUrl
+  readonly image?: WebUrl
   readonly topics?: ReadonlyArray<string>
   readonly publishedAt?: number
   /** Pin the `created_at`. Defaults to the system clock ({@link now}). */
@@ -225,9 +234,9 @@ interface BuildLongformInput {
  * Build an addressable long-form article event (NIP-23) with the given `d` tag and optional metadata tags. Each topic
  * becomes a `t` tag through {@link normaliseHashtag} (NIP-24 `t` values are lowercase); empty and repeated topics are
  * dropped. An empty `dTag` is still written, since an addressable event is keyed on its `d` tag value (NIP-01). An
- * empty `title` or `summary` is written as an empty tag and an absent one is not written (shared ADR-0079); `image` is
- * an `HttpUrl`, so only an `http` or `https` URL can be written. A `publishedAt` that is not a whole number of seconds
- * of zero or more throws `InvalidArgumentError`.
+ * empty `title` or `summary` is written as an empty tag and an absent one is not written; `image` is a `WebUrl`, so
+ * only an `http` or `https` URL can be written, and it is written exactly as given (shared ADR-0079). A `publishedAt`
+ * that is not a whole number of seconds of zero or more throws `InvalidArgumentError`.
  */
 export const buildLongform = (
   { kind, dTag, content, title, summary, image, topics, publishedAt, createdAt }: BuildLongformInput,

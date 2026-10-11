@@ -39,6 +39,35 @@ Deno.test("extractContentReferences - skips a bare entity after a letter or digi
   assertEquals(extractContentReferences(`x${npub} 9${note}`), [])
 })
 
+for (
+  const [where, content] of [
+    ["an https path", `see https://primal.net/p/${npub}`],
+    ["an http path", `http://example.com/e/${note} here`],
+    ["a query", `https://example.com/?u=${npub}`],
+    ["an upper-case scheme", `HTTPS://example.com/${npub}`],
+  ]
+) {
+  Deno.test(`extractContentReferences - an entity inside ${where} is no reference (shared ADR-0107)`, () => {
+    assertEquals(extractContentReferences(content ?? ""), [])
+  })
+}
+
+Deno.test("extractContentReferences - an entity after the whitespace ending a web URL is a reference (shared ADR-0107)", () => {
+  assertEquals(extractContentReferences(`https://example.com/p ${npub}`).length, 1)
+})
+
+Deno.test("extractContentReferences - a non-breaking space ends a web URL (shared ADR-0107)", () => {
+  assertEquals(extractContentReferences(`https://example.com/p\u00a0${npub}`).length, 1)
+})
+
+Deno.test("extractContentReferences - a byte order mark does not end a web URL, as it is no Unicode whitespace", () => {
+  assertEquals(extractContentReferences(`https://example.com/p\ufeff${npub}`), [])
+})
+
+Deno.test("extractContentReferences - a nostr: URI inside a web URL is a reference (shared ADR-0107)", () => {
+  assertEquals(extractContentReferences(`https://example.com/nostr:${npub}`).length, 1)
+})
+
 Deno.test("extractContentReferences - a nostr: URI whose entity runs on into further letters is no reference", () => {
   assertEquals(extractContentReferences(`x nostr:${npub}xyz nostr:${note}xyz`), [])
 })

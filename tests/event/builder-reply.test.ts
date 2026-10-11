@@ -6,7 +6,7 @@ import { analyseEvent, replyTargetRef } from "../../src/domain/service/event-ana
 import { KIND_COMMENT, KIND_LONGFORM_CONTENT, KIND_TEXT_NOTE } from "../../src/domain/value-object/kinds.ts"
 import type { Rumour } from "../../src/domain/value-object/nostr-event.ts"
 import type { ExternalContentRef } from "../../src/domain/value-object/thread-ref.ts"
-import { eventIdFixture, httpUrlFixture, publicKeyFixture, relayUrlFixture } from "../../testing.ts"
+import { eventIdFixture, publicKeyFixture, relayUrlFixture, webUrlFixture } from "../../testing.ts"
 
 const a1 = publicKeyFixture("a1".repeat(32))
 const p1 = publicKeyFixture("01".repeat(32))
@@ -296,7 +296,7 @@ Deno.test("buildReply - a comment on an article reads back with the article as r
 })
 
 const PODCAST_EPISODE = "podcast:item:guid:d98d189b-dc7b-45b1-8720-d4b98690f31f"
-const EPISODE_PAGE = httpUrlFixture("https://fountain.fm/episode/z1y9TMQRuqXl2awyrQxg")
+const EPISODE_PAGE = webUrlFixture("https://fountain.fm/episode/z1y9TMQRuqXl2awyrQxg")
 
 Deno.test("buildReply - a comment on a website's url scopes to and names it with I / i and K / k (NIP-22 example)", () => {
   const url = "https://abc.com/articles/1"
@@ -349,6 +349,35 @@ Deno.test("buildReply - a comment on external content reads back with it, and it
   assertEquals([refs.isReply, refs.rootEvent, refs.replyToEvent], [true, episode, episode])
 })
 
+Deno.test("buildReply - external content's hint keeps its fragment on I and i (shared ADR-0090)", () => {
+  const hint = webUrlFixture("https://x.example/#/post/1")
+  const tags = buildReply("x", { type: "external", id: PODCAST_EPISODE, kind: "podcast:item:guid", hint }).tags
+  assertEquals(tags.filter((t) => t[0] === "I" || t[0] === "i").map((t) => t[2]), [hint, hint])
+})
+
+Deno.test("buildReply - throws for an external content hint that is not a web URL, cast past its type (shared ADR-0090)", () => {
+  const unchecked = {
+    type: "external",
+    id: PODCAST_EPISODE,
+    kind: "podcast:item:guid",
+    hint: "javascript:alert(1)",
+  } as const
+  // @ts-expect-error: a hint is a WebUrl, put through parseWebUrl before it is given
+  assertThrows(() => buildReply("x", unchecked), InvalidArgumentError)
+})
+
+Deno.test("buildReply - writes an external content hint cast past its type exactly as written (shared ADR-0090)", () => {
+  const unchecked = {
+    type: "external",
+    id: PODCAST_EPISODE,
+    kind: "podcast:item:guid",
+    hint: "HTTPS://X.example:443/a#b",
+  } as const
+  // @ts-expect-error: a hint is a WebUrl, put through parseWebUrl before it is given
+  const tags = buildReply("x", unchecked).tags
+  assertEquals(tags.filter((t) => t[0] === "I").map((t) => t[2]), ["HTTPS://X.example:443/a#b"])
+})
+
 Deno.test("buildReply - throws for external content with an empty id (NIP-22 I / i MUST carry the I-value)", () => {
   assertThrows(() => buildReply("x", { type: "external", id: "", kind: "web", hint: null }), InvalidArgumentError)
 })
@@ -369,12 +398,12 @@ const externalComment = (hint: string): Rumour =>
     ]],
   })
 
-Deno.test("buildReply - a copied root scope writes an I hint in its web page form (shared ADR-0090)", () => {
+Deno.test("buildReply - a copied root scope writes an I hint exactly as written (shared ADR-0090)", () => {
   const tags = buildReply("x", externalComment("HTTPS://Fountain.FM:443/episode/1#top")).tags
-  assertEquals(tags.filter((t) => t[0] === "I"), [["I", PODCAST_EPISODE, "https://fountain.fm/episode/1"]])
+  assertEquals(tags.filter((t) => t[0] === "I"), [["I", PODCAST_EPISODE, "HTTPS://Fountain.FM:443/episode/1#top"]])
 })
 
-Deno.test("buildReply - a copied root scope drops an I hint that is no web page (shared ADR-0090)", () => {
+Deno.test("buildReply - a copied root scope drops an I hint that is not a web URL (shared ADR-0090)", () => {
   const tags = buildReply("x", externalComment("javascript:alert(1)")).tags
   assertEquals(tags.filter((t) => t[0] === "I"), [["I", PODCAST_EPISODE]])
 })

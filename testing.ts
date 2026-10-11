@@ -22,6 +22,7 @@ import type {
   SubscriptionId,
   Tag,
   UnsignedEvent,
+  WebUrl,
 } from "./mod.ts"
 import {
   buildRumour,
@@ -39,6 +40,7 @@ import {
   parseRelayUrl,
   parseSig,
   parseSubscriptionId,
+  parseWebUrl,
 } from "./mod.ts"
 
 const fixtureOf = <T>(parse: (raw: unknown) => T | null, brand: string): (raw: string) => T => (raw: string): T => {
@@ -59,6 +61,8 @@ export const nip05IdFixture: (raw: string) => Nip05Id = fixtureOf(parseNip05Id, 
 export const relayUrlFixture: (raw: string) => RelayUrl = fixtureOf(parseRelayUrl, "RelayUrl")
 /** Brand a known-good test value as an `HttpUrl`, in its canonical form; throws when `raw` is not an http(s) URL. */
 export const httpUrlFixture: (raw: string) => HttpUrl = fixtureOf(parseHttpUrl, "HttpUrl")
+/** Brand a known-good test value as a `WebUrl`, kept exactly as written; throws when `raw` is not an http(s) URL. */
+export const webUrlFixture: (raw: string) => WebUrl = fixtureOf(parseWebUrl, "WebUrl")
 /** Brand a known-good test value as an `AuthChallenge`; throws when `raw` is empty. */
 export const authChallengeFixture: (raw: string) => AuthChallenge = fixtureOf(parseAuthChallenge, "AuthChallenge")
 /** Brand a known-good test value as a `SubscriptionId`; throws when `raw` is empty or over 64 code points. */

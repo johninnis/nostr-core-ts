@@ -4,7 +4,7 @@ import type { Nip98ReplayGuard } from "../../src/application/port/nip98-replay-g
 import { encodeAuthHeader } from "../../src/domain/service/auth-header.ts"
 import { sha256Hex } from "../../src/domain/service/sha256.ts"
 import { KIND_HTTP_AUTH } from "../../src/domain/value-object/kinds.ts"
-import { failure, ok } from "../../src/domain/value-object/result.ts"
+import { ok } from "../../src/domain/value-object/result.ts"
 import { createLocalSigner } from "../../src/infrastructure/crypto/local-signer.ts"
 import { keyPairOf } from "../support/keys.ts"
 import { httpUrlFixture } from "../../testing.ts"
@@ -41,7 +41,7 @@ Deno.test("validateAuthHeader - hashes a byte body, such as an uploaded file, an
   assertEquals(await validate(body, sha256Hex(body)), ok(AUTHOR.pk))
 })
 
-Deno.test("validateAuthHeader - an empty byte body is no body, so a payload tag is unexpected", async () => {
+Deno.test("validateAuthHeader - an empty byte body admits a payload tag holding its hash (shared ADR-0024)", async () => {
   const empty = new Uint8Array()
-  assertEquals(await validate(empty, sha256Hex(empty)), failure("payload-unexpected"))
+  assertEquals(await validate(empty, sha256Hex(empty)), ok(AUTHOR.pk))
 })

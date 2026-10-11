@@ -177,14 +177,14 @@ Deno.test("buildDeletion - deletes a regular event by its id and names its kind 
   assertEquals([event.kind, event.tags, event.content], [KIND_EVENT_DELETION, [["e", eid1], ["k", "1"]], ""])
 })
 
-Deno.test("buildDeletion - deletes an addressable event by its a coordinate and names its kind (NIP-09)", () => {
+Deno.test("buildDeletion - deletes an addressable event by its version's e tag and its a coordinate (shared ADR-0016)", () => {
   const event = buildDeletion(pk1, signed({ kind: 30000, tags: [["d", "my-list"]] }))
-  assertEquals(event.tags, [["a", `30000:${pk1}:my-list`], ["k", "30000"]])
+  assertEquals(event.tags, [["e", eid1], ["a", `30000:${pk1}:my-list`], ["k", "30000"]])
 })
 
-Deno.test("buildDeletion - deletes a replaceable event by its kind:pubkey: coordinate (NIP-09, shared ADR-0016)", () => {
+Deno.test("buildDeletion - deletes a replaceable event by its version's e tag and its kind:pubkey: coordinate (shared ADR-0016)", () => {
   const event = buildDeletion(pk1, signed({ kind: 10000 }))
-  assertEquals(event.tags, [["a", `10000:${pk1}:`], ["k", "10000"]])
+  assertEquals(event.tags, [["e", eid1], ["a", `10000:${pk1}:`], ["k", "10000"]])
 })
 
 Deno.test("buildDeletion - throws for another author's event, which a deletion request cannot name (NIP-09)", () => {

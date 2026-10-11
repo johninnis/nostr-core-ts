@@ -3,6 +3,7 @@ import type { Tag, UnsignedEvent } from "../value-object/nostr-event.ts"
 import { now } from "./timestamp.ts"
 import { sha256Hex } from "./sha256.ts"
 import type { HttpUrl } from "../value-object/http-url.ts"
+import { lowerAscii } from "../value-object/ascii-case.ts"
 import { InvalidArgumentError } from "../exception/invalid-argument-error.ts"
 import { isNonNegativeInteger } from "./guards.ts"
 
@@ -27,6 +28,12 @@ export interface BuildNip98AuthEventInput {
   readonly createdAt?: number
 }
 
+const FETCH_NORMALISED_METHODS: ReadonlyArray<string> = ["DELETE", "GET", "HEAD", "OPTIONS", "POST", "PUT"]
+
+// Deliberate: Fetch's six standard methods are upper-cased, as Fetch sends them, any other kept — see shared ADR-0070
+const methodAsFetchSendsIt = (method: string): string =>
+  FETCH_NORMALISED_METHODS.find((standard) => lowerAscii(standard) === lowerAscii(method)) ?? method
+
 const expirationOf = (createdAt: number, expiresInSeconds: number): string => {
   const expiration = createdAt + expiresInSeconds
   if (!isNonNegativeInteger(expiresInSeconds) || !isNonNegativeInteger(expiration)) {
@@ -39,7 +46,9 @@ const expirationOf = (createdAt: number, expiresInSeconds: number): string => {
 
 /**
  * Build a kind-27235 NIP-98 auth event for an HTTP request. The `u` tag names `url`, an `HttpUrl` and so already in the
- * form a validator compares it in. The `payload` tag is computed via SHA-256 of `body` when non-empty, as
+ * form a validator compares it in. The `method` tag names `method` as Fetch sends it: one of `DELETE`, `GET`, `HEAD`,
+ * `OPTIONS`, `POST` and `PUT`, given in any case, upper-cased, and any other method exactly as given, so `patch` stays
+ * `patch` (shared ADR-0070). The `payload` tag is computed via SHA-256 of `body` when non-empty, as
  * `validateAuthHeader` hashes the inbound body itself, so a caller holding the body never hashes it. Pass
  * `expiresInSeconds` to emit a NIP-98 `expiration` tag; one that is not a whole number of seconds of zero or more, or
  * that puts the expiration beyond the safe integer range, throws `InvalidArgumentError`.
@@ -48,7 +57,7 @@ export const buildNip98AuthEvent = (input: BuildNip98AuthEventInput): UnsignedEv
   const createdAt = input.createdAt ?? now()
   const tags: Array<Tag> = [
     ["u", input.url],
-    ["method", input.method],
+    ["method", methodAsFetchSendsIt(input.method)],
   ]
   if (input.body !== undefined && input.body.length > 0) {
     tags.push(["payload", sha256Hex(input.body)])

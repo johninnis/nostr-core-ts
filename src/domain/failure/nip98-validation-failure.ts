@@ -14,7 +14,6 @@ export type Nip98ValidationFailure =
   | "method-disagreeing"
   | "method-mismatch"
   | "payload-disagreeing"
-  | "payload-unexpected"
   | "payload-missing"
   | "payload-mismatch"
   | "signature"

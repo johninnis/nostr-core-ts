@@ -5,7 +5,7 @@ import type { EventOrAddressRef } from "../../src/domain/value-object/event-or-a
 import type { EventId } from "../../src/domain/value-object/event-id.ts"
 import type { NostrEvent, Tag } from "../../src/domain/value-object/nostr-event.ts"
 import type { KindMetadata } from "../../src/domain/service/event-analysis.ts"
-import { eventIdFixture, httpUrlFixture, publicKeyFixture, sigFixture } from "../../testing.ts"
+import { eventIdFixture, publicKeyFixture, sigFixture, webUrlFixture } from "../../testing.ts"
 import {
   KIND_COMMENT,
   KIND_GENERIC_REPOST,
@@ -364,7 +364,7 @@ Deno.test("analyseEvent - a reply to a podcast comment has the episode as root a
     ],
   })
   const { refs } = analyseEvent(raw)
-  const hint = httpUrlFixture("https://fountain.fm/episode/z1y9TMQRuqXl2awyrQxg")
+  const hint = webUrlFixture("https://fountain.fm/episode/z1y9TMQRuqXl2awyrQxg")
   assertEquals(refs.rootEvent, { type: "external", id: episode, kind: "podcast:item:guid", hint })
   assertEquals(refs.replyToEvent, eventRef(eid2))
 })

@@ -347,96 +347,122 @@ Deno.test("verifyZapReceipt - refuses a zap request whose signature does not ver
   assertEquals(verifyZapReceipt(forged, provider), failure("zap-request-signature-invalid"))
 })
 
-Deno.test("parseNutzap - sums proof amounts", () => {
-  const event = makeEvent(9321, [
-    ["proof", JSON.stringify({ amount: 10 })],
-    ["proof", JSON.stringify({ amount: 5 })],
-  ], "nice")
-  const info = parseNutzap(event)
-  assertEquals(info?.amountSats, 15)
-  assertEquals(info?.message, "nice")
-  assertEquals(info?.pubkey, pk)
+const proofOf = (amount: unknown): Tag => ["proof", JSON.stringify({ amount })]
+
+Deno.test("parseNutzap - sums proof amounts in the unit they state", () => {
+  assertEquals(parseNutzap(makeEvent(9321, [proofOf(10), proofOf(5)]))?.cashuAmount, { amount: 15, unit: "sat" })
 })
 
-Deno.test("parseNutzap - converts msat units to sats", () => {
-  const event = makeEvent(9321, [
-    ["proof", JSON.stringify({ amount: 21000 })],
-    ["unit", "msat"],
-  ])
-  assertEquals(parseNutzap(event)?.amountSats, 21)
+Deno.test("parseNutzap - reads the sender, the message and the time", () => {
+  const nutzap = parseNutzap(makeEvent(9321, [proofOf(10)], "nice"))
+  assertEquals([nutzap?.pubkey, nutzap?.message, nutzap?.createdAt], [pk, "nice", 1700000000])
 })
 
-Deno.test('parseNutzap - reads proofs as sats when the unit tag is sat or absent (NIP-61: "Default: `sat` if omitted")', () => {
-  const proof: Tag = ["proof", JSON.stringify({ amount: 21 })]
-  assertEquals(parseNutzap(makeEvent(9321, [proof, ["unit", "sat"]]))?.amountSats, 21)
-  assertEquals(parseNutzap(makeEvent(9321, [proof]))?.amountSats, 21)
+Deno.test("parseNutzap - a sat nutzap's bitcoin amount is its sum in millisatoshis (shared ADR-0080)", () => {
+  assertEquals(parseNutzap(makeEvent(9321, [proofOf(10), proofOf(5)]))?.amountMillisats, 15_000)
 })
 
-Deno.test("parseNutzap - returns null for a unit that is not bitcoin, since usd or eur proofs state no sats (NIP-61)", () => {
-  assertEquals(parseNutzap(makeEvent(9321, [["proof", JSON.stringify({ amount: 5 })], ["unit", "usd"]])), null)
+Deno.test("parseNutzap - a sat nutzap's bitcoin amount in sats is its sum", () => {
+  assertEquals(parseNutzap(makeEvent(9321, [proofOf(10), proofOf(5)]))?.amountSats, 15)
+})
+
+Deno.test("parseNutzap - an msat nutzap carries its amount in msat", () => {
+  assertEquals(parseNutzap(makeEvent(9321, [proofOf(21000), ["unit", "msat"]]))?.cashuAmount, {
+    amount: 21000,
+    unit: "msat",
+  })
+})
+
+Deno.test("parseNutzap - an msat nutzap's bitcoin amount is its sum in millisatoshis", () => {
+  assertEquals(parseNutzap(makeEvent(9321, [proofOf(21000), ["unit", "msat"]]))?.amountMillisats, 21000)
+})
+
+Deno.test('parseNutzap - reads proofs in sat when the unit tag is absent (NIP-61: "Default: `sat` if omitted")', () => {
+  assertEquals(parseNutzap(makeEvent(9321, [proofOf(21)]))?.cashuAmount?.unit, "sat")
+})
+
+Deno.test("parseNutzap - a nutzap in usd carries its amount in usd, never converted (NIP-61, shared ADR-0080)", () => {
+  assertEquals(parseNutzap(makeEvent(9321, [proofOf(5), ["unit", "usd"]]))?.cashuAmount, { amount: 5, unit: "usd" })
+})
+
+Deno.test("parseNutzap - a nutzap in usd has no bitcoin amount (shared ADR-0080)", () => {
+  const nutzap = parseNutzap(makeEvent(9321, [proofOf(5), ["unit", "usd"]]))
+  assertEquals([nutzap?.amountMillisats, nutzap?.amountSats], [null, null])
+})
+
+Deno.test("parseNutzap - a unit named like a property every JavaScript object has is no bitcoin unit (shared ADR-0080)", () => {
+  assertEquals(parseNutzap(makeEvent(9321, [proofOf(5), ["unit", "constructor"]]))?.amountMillisats, null)
+})
+
+Deno.test("parseNutzap - an empty unit is its own unit, not the default (shared ADR-0079)", () => {
+  assertEquals(parseNutzap(makeEvent(9321, [proofOf(5), ["unit", ""]]))?.cashuAmount?.unit, "")
+})
+
+Deno.test("parseNutzap - a nutzap in another unit is read above the bitcoin ceiling (shared ADR-0080)", () => {
+  assertEquals(
+    parseNutzap(makeEvent(9321, [proofOf(200_000_000_000_000), ["unit", "usd"]]))?.cashuAmount?.amount,
+    200_000_000_000_000,
+  )
+})
+
+Deno.test("parseNutzap - returns null when the sum passes the safe integer range (shared ADR-0098)", () => {
+  const event = makeEvent(9321, [proofOf(Number.MAX_SAFE_INTEGER), proofOf(1), ["unit", "usd"]])
+  assertEquals(parseNutzap(event), null)
 })
 
 Deno.test("parseNutzap - returns null when unit tags disagree, whatever their order (shared ADR-0014)", () => {
-  const proof: Tag = ["proof", JSON.stringify({ amount: 21000 })]
-  assertEquals(parseNutzap(makeEvent(9321, [proof, ["unit", "msat"], ["unit", "sat"]])), null)
-  assertEquals(parseNutzap(makeEvent(9321, [proof, ["unit", "sat"], ["unit", "msat"]])), null)
+  const proof = proofOf(21000)
+  assertEquals([
+    parseNutzap(makeEvent(9321, [proof, ["unit", "msat"], ["unit", "sat"]])),
+    parseNutzap(makeEvent(9321, [proof, ["unit", "sat"], ["unit", "msat"]])),
+  ], [null, null])
 })
 
 Deno.test("parseNutzap - reads a repeated identical unit tag as one claim (shared ADR-0014)", () => {
-  const event = makeEvent(9321, [["proof", JSON.stringify({ amount: 21000 })], ["unit", "msat"], ["unit", "msat"]])
+  const event = makeEvent(9321, [proofOf(21000), ["unit", "msat"], ["unit", "msat"]])
   assertEquals(parseNutzap(event)?.amountSats, 21)
 })
 
 Deno.test("parseNutzap - counts a proof repeated in identical tags once (shared ADR-0014)", () => {
   const proof: Tag = ["proof", JSON.stringify({ amount: 10, secret: "s1" })]
-  assertEquals(parseNutzap(makeEvent(9321, [proof, proof]))?.amountSats, 10)
+  assertEquals(parseNutzap(makeEvent(9321, [proof, proof]))?.cashuAmount?.amount, 10)
 })
 
-Deno.test("parseNutzap - returns null without proof tags", () => {
-  assertEquals(parseNutzap(makeEvent(9321, [["unit", "sat"]])), null)
+Deno.test("parseNutzap - a nutzap without proof tags is read with no amount (shared ADR-0080)", () => {
+  const nutzap = parseNutzap(makeEvent(9321, [["unit", "sat"]]))
+  assertEquals([nutzap?.cashuAmount, nutzap?.amountMillisats, nutzap?.amountSats], [null, null, null])
 })
 
-Deno.test("parseNutzap - returns null when the proof total exceeds 1 BTC", () => {
-  const event = makeEvent(9321, [
-    ["proof", JSON.stringify({ amount: 100_000_000 })],
-    ["proof", JSON.stringify({ amount: 1 })],
-  ])
-  assertEquals(parseNutzap(event), null)
+Deno.test("parseNutzap - returns null when a bitcoin total exceeds 1 BTC (shared ADR-0039)", () => {
+  assertEquals(parseNutzap(makeEvent(9321, [proofOf(100_000_000), proofOf(1)])), null)
 })
 
 Deno.test("parseNutzap - skips a proof whose amount is not a number (shared ADR-0080)", () => {
-  const event = makeEvent(9321, [
-    ["proof", JSON.stringify({ amount: "not-a-number" })],
-    ["proof", JSON.stringify({ amount: 5 })],
-  ])
-  assertEquals(parseNutzap(event)?.amountSats, 5)
+  assertEquals(parseNutzap(makeEvent(9321, [proofOf("not-a-number"), proofOf(5)]))?.cashuAmount?.amount, 5)
 })
 
 Deno.test("parseNutzap - skips a proof that is not JSON", () => {
-  const event = makeEvent(9321, [["proof", "not valid json"], ["proof", JSON.stringify({ amount: 5 })]])
-  assertEquals(parseNutzap(event)?.amountSats, 5)
+  assertEquals(parseNutzap(makeEvent(9321, [["proof", "not valid json"], proofOf(5)]))?.cashuAmount?.amount, 5)
 })
 
 Deno.test("parseNutzap - skips a proof that is not an object", () => {
-  const event = makeEvent(9321, [["proof", "[1, 2, 3]"], ["proof", JSON.stringify({ amount: 7 })]])
-  assertEquals(parseNutzap(event)?.amountSats, 7)
+  assertEquals(parseNutzap(makeEvent(9321, [["proof", "[1, 2, 3]"], proofOf(7)]))?.cashuAmount?.amount, 7)
 })
 
-Deno.test("parseNutzap - returns null when every proof is malformed, leaving no amount", () => {
-  assertEquals(
-    parseNutzap(makeEvent(9321, [["proof", "not valid json"], ["proof", JSON.stringify({ amount: "5" })]])),
-    null,
-  )
+Deno.test("parseNutzap - a nutzap whose every proof is malformed is read with no amount (shared ADR-0080)", () => {
+  assertEquals(parseNutzap(makeEvent(9321, [["proof", "not valid json"], proofOf("5")]))?.cashuAmount, null)
 })
 
 Deno.test("parseNutzap - returns null when any proof amount is negative (shared ADR-0080)", () => {
-  const event = makeEvent(9321, [["proof", JSON.stringify({ amount: -5 })], ["proof", JSON.stringify({ amount: 10 })]])
-  assertEquals(parseNutzap(event), null)
+  assertEquals(parseNutzap(makeEvent(9321, [proofOf(-5), proofOf(10)])), null)
 })
 
 Deno.test("parseNutzap - skips a proof whose amount is fractional", () => {
-  const event = makeEvent(9321, [["proof", JSON.stringify({ amount: 1.5 })], ["proof", JSON.stringify({ amount: 10 })]])
-  assertEquals(parseNutzap(event)?.amountSats, 10)
+  assertEquals(parseNutzap(makeEvent(9321, [proofOf(1.5), proofOf(10)]))?.cashuAmount?.amount, 10)
+})
+
+Deno.test("parseNutzap - skips a proof whose amount is no safe integer, not refusing the nutzap (shared ADR-0098)", () => {
+  assertEquals(parseNutzap(makeEvent(9321, [proofOf(1e20), proofOf(10)]))?.cashuAmount?.amount, 10)
 })
 
 Deno.test("parseZapReceipt - NIP-57 Appendix E example: the sender is the zap request's author and 10u is 1000 sat", () => {

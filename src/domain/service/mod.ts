@@ -67,8 +67,8 @@ export {
   serialiseEventMessage,
   serialiseReqMessage,
 } from "./client-message.ts"
-export { parseReasonPrefix, parseRelayMessage } from "./relay-message.ts"
-export type { ReasonPrefix, RelayMessage } from "./relay-message.ts"
+export { eoseHasHint, parseReasonPrefix, parseRelayMessage } from "./relay-message.ts"
+export type { EoseHint, EoseMessage, ReasonPrefix, RelayMessage } from "./relay-message.ts"
 
 export { getDTag, replaceableStorageKey, replaceableSupersedes } from "./replaceable.ts"
 export { emojiShortcodePattern, parseEmojiTags } from "./emoji.ts"
@@ -104,8 +104,19 @@ export type {
 } from "./event-analysis.ts"
 
 export { DEFAULT_REACTION } from "./reaction.ts"
-export { parseBolt11Amount, parseNutzap, parseZapReceipt, verifyZapReceipt } from "./zap-parser.ts"
-export type { ZapInfo, ZapReceipt } from "./zap-parser.ts"
+export {
+  parseBolt11Amount,
+  parseNutzap,
+  parseZapReceipt,
+  verifyNutzap,
+  verifyNutzapDleq,
+  verifyZapReceipt,
+} from "./zap-parser.ts"
+export type { CashuAmount, ListedNutzap, Nutzap, NutzapDleq, NutzapProof, ZapInfo, ZapReceipt } from "./zap-parser.ts"
+export { parseNutzapInfo } from "./nutzap-info.ts"
+export type { NutzapInfo } from "./nutzap-info.ts"
+export { mintKeysetUrl, parseMintKeysets } from "./mint-keyset.ts"
+export type { MintKeyset } from "./mint-keyset.ts"
 export {
   isValidLightningAddress,
   isValidLnurl,
@@ -135,6 +146,7 @@ export { cipherSchemeOf } from "./cipher-scheme.ts"
 export type { CipherScheme } from "./cipher-scheme.ts"
 export type { Signer, SignerKind } from "./signer.ts"
 export { checkPubkeyMatches } from "./pubkey-match.ts"
+export { checkSignedMatchesTemplate } from "./template-match.ts"
 export { isUserRejection } from "./user-rejection.ts"
 
 export { buildNip98AuthEvent } from "./nip98-builder.ts"
@@ -152,9 +164,15 @@ export { randomBytes, randomUint32 } from "./random.ts"
 export type { RandomUint32Fn } from "./random.ts"
 
 export { formatHex, parseHex } from "./hex.ts"
+export { parseSecretKey } from "./secret-key.ts"
 export { isArrayOf, isNumberArray, isRecord, isStringArray } from "./guards.ts"
 export { parseJson } from "./json.ts"
 export { now } from "./timestamp.ts"
 export type { Clock } from "./timestamp.ts"
 export { parseRelayInformation } from "./nip11-info.ts"
 export type { RelayInformation } from "./nip11-info.ts"
+
+export { groupChatFilter, groupMetadataFilter, parseGroupMetadata } from "./group.ts"
+export type { Group } from "./group.ts"
+export { buildGroupChatMessage, groupRelayHintOf, groupTagOf, withGroupTag } from "./group-chat.ts"
+export type { GroupChatInput } from "./group-chat.ts"

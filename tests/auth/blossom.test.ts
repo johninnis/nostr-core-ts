@@ -64,15 +64,21 @@ Deno.test("parseBlossomAuthHeader - reads the header encodeAuthHeader writes", (
   assertEquals(parsed.success ? parsed.value : parsed.error, event)
 })
 
-Deno.test("parseBlossomAuthHeader - rejects a header over 4096 characters", () => {
-  assertEquals(parseBlossomAuthHeader("Nostr " + "A".repeat(4096)), { success: false, error: "header-too-long" })
+Deno.test("parseBlossomAuthHeader - rejects a header over 8000 characters (shared ADR-0106)", () => {
+  assertEquals(parseBlossomAuthHeader("Nostr " + "A".repeat(7995)), { success: false, error: "header-too-long" })
+})
+
+Deno.test("parseBlossomAuthHeader - reads a header longer than the 4096 characters a NIP-98 header may be (shared ADR-0106)", () => {
+  const event = makeEvent("a".repeat(4096))
+  const parsed = parseBlossomAuthHeader(encodeBlossomAuthHeader(event) ?? "")
+  assertEquals(parsed.success ? parsed.value : parsed.error, event)
 })
 
 Deno.test("parseBlossomAuthHeader - rejects a header without the Nostr scheme", () => {
   assertEquals(parseBlossomAuthHeader("Bearer token"), { success: false, error: "header-bad-prefix" })
 })
 
-const MAX_HEADER_LENGTH = 4096
+const MAX_HEADER_LENGTH = 8000
 
 const contentLengthsAroundTheBound = (): readonly [number, number] => {
   let length = 0
@@ -82,11 +88,11 @@ const contentLengthsAroundTheBound = (): readonly [number, number] => {
 
 const [longestContent, overlongContent] = contentLengthsAroundTheBound()
 
-Deno.test("encodeBlossomAuthHeader - writes the longest header within 4096 characters, which parseBlossomAuthHeader reads", () => {
+Deno.test("encodeBlossomAuthHeader - writes the longest header within 8000 characters, which parseBlossomAuthHeader reads", () => {
   const header = encodeBlossomAuthHeader(makeEvent("a".repeat(longestContent)))
   assertEquals(header === null ? null : parseBlossomAuthHeader(header).success, true)
 })
 
-Deno.test("encodeBlossomAuthHeader - returns null for a header longer than 4096 characters", () => {
+Deno.test("encodeBlossomAuthHeader - returns null for a header longer than 8000 characters", () => {
   assertEquals(encodeBlossomAuthHeader(makeEvent("a".repeat(overlongContent))), null)
 })

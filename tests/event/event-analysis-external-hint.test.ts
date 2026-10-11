@@ -22,11 +22,11 @@ const externalRootHint = (hints: ReadonlyArray<string | null>): string | null =>
   return root?.type === "external" ? root.hint : "not external"
 }
 
-Deno.test("analyseEvent - an external content hint is read in its NIP-98 URL form (shared ADR-0090)", () => {
-  assertEquals(externalRootHint(["HTTPS://Fountain.FM:443/episode/1#top"]), "https://fountain.fm/episode/1")
+Deno.test("analyseEvent - an external content hint is kept exactly as written, its fragment included (shared ADR-0090)", () => {
+  assertEquals(externalRootHint(["HTTPS://Fountain.FM:443/episode/1#top"]), "HTTPS://Fountain.FM:443/episode/1#top")
 })
 
-Deno.test("analyseEvent - an external content hint that is no web page is dropped and the content still read (shared ADR-0090)", () => {
+Deno.test("analyseEvent - an external content hint that is not a web URL is dropped and the content still read (shared ADR-0090)", () => {
   assertEquals([externalRootHint(["javascript:alert(1)"]), externalRootHint(["wss://relay.example.com"])], [null, null])
 })
 
@@ -34,9 +34,17 @@ Deno.test("analyseEvent - external content without a hint reads with none", () =
   assertEquals(externalRootHint([null]), null)
 })
 
-Deno.test("analyseEvent - external content hints stating one web page, however written, are that one hint (shared ADR-0090)", () => {
-  const hints = ["https://fountain.fm/episode/1", "HTTPS://fountain.fm:443/episode/1", null, "javascript:alert(1)"]
-  assertEquals(externalRootHint(hints), "https://fountain.fm/episode/1")
+Deno.test("analyseEvent - external content hints written identically are one hint (shared ADR-0090)", () => {
+  const hints = ["HTTPS://fountain.fm:443/episode/1", "HTTPS://fountain.fm:443/episode/1", null, "javascript:alert(1)"]
+  assertEquals(externalRootHint(hints), "HTTPS://fountain.fm:443/episode/1")
+})
+
+Deno.test("analyseEvent - external content hints in two spellings of one URL state no hint (shared ADR-0090)", () => {
+  assertEquals(externalRootHint(["https://fountain.fm/episode/1", "HTTPS://fountain.fm:443/episode/1"]), null)
+})
+
+Deno.test("analyseEvent - external content hints differing only by fragment state no hint (shared ADR-0090)", () => {
+  assertEquals(externalRootHint(["https://x.example/#/post/1", "https://x.example/#/post/2"]), null)
 })
 
 Deno.test("analyseEvent - external content hints naming different web pages state no hint (shared ADR-0090)", () => {
