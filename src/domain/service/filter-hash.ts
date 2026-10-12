@@ -2,7 +2,7 @@ import type { NostrFilter } from "../value-object/nostr-filter.ts"
 import { isRecord } from "./guards.ts"
 import { sha256Hex } from "./sha256.ts"
 
-// Deliberate: byte-identical to the PHP FilterHasher, hence the post-processed JSON.stringify — see ADR-0014
+// Deliberate: byte-identical to the PHP FilterHasher, hence the post-processed JSON.stringify — see ADR-0042
 const encodeCanonical = (value: unknown): string =>
   JSON.stringify(value).replace(/[\u0080-\uffff]/g, (unit) => `\\u${unit.charCodeAt(0).toString(16).padStart(4, "0")}`)
 
@@ -33,7 +33,7 @@ const canonicalise = (value: unknown): unknown => {
   return value
 }
 
-// Deliberate: a filter carrying a # key NIP-01 does not define is hashed like any other value — see ADR-0014
+// Deliberate: a filter carrying a # key NIP-01 does not define is hashed like any other value — see ADR-0042
 /**
  * Lowercase hex SHA-256 of a `REQ` filter set's canonical form: object keys and array elements sorted, the filters
  * included, and every non-ASCII UTF-16 code unit escaped as a lowercase `\uXXXX`. Filter sets that differ only in those

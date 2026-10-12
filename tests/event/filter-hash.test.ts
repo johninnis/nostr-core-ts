@@ -92,7 +92,7 @@ Deno.test("hashFilters - preserves duplicate array elements (equal sort keys)", 
   assertNotEquals(hashFilters([{ authors: [authorA, authorA] }]), hashFilters([{ authors: [authorA] }]))
 })
 
-Deno.test("hashFilters - hashes a filter carrying a # key NIP-01 does not define like any other value (ADR-0014)", () => {
+Deno.test("hashFilters - hashes a filter carrying a # key NIP-01 does not define like any other value (ADR-0042)", () => {
   const unexpressible: NostrFilter = JSON.parse('{"#tt":["x"]}')
   assertEquals(hashFilters([unexpressible]), sha256Hex('[{"#tt":["x"]}]'))
 })

@@ -190,7 +190,7 @@ const unsigned = (kind: number, tags: ReadonlyArray<Tag>, content: string): Unsi
  */
 export type ReplyHint<P extends Rumour | ExternalContentRef> = [P] extends [Rumour] ? RelayUrl : never
 
-// Deliberate: one builder for every reply, the kind decided by the parent — see ADR-0028
+// Deliberate: one builder for every reply, the kind decided by the parent — see ADR-0043
 /**
  * Build the reply to `parent`, choosing its kind from what it answers (shared ADR-0076). A kind 1 note, a kind 9 chat
  * message, a kind 42 channel message and a kind 1311 live chat message are answered in their own kind; anything else —

@@ -80,7 +80,7 @@ export const parseAuthHeader = (header: string): Result<NostrEvent, AuthHeaderDe
 
 const decodeBlossomCredentials: Base64Decoder = (encoded) => decodeBase64UrlUnpadded(encoded) ?? decodeBase64(encoded)
 
-// Deliberate: BUD-11 writes unpadded base64url, and the padded base64 every Blossom client wrote before it is still read — see ADR-0039
+// Deliberate: BUD-11 writes unpadded base64url, and the padded base64 every Blossom client wrote before it is still read — see ADR-0047
 /**
  * Parse a Blossom `Authorization: Nostr <base64url-json>` header (BUD-11) into its signed event; does not verify the
  * signature. The credentials are read as canonical base64url without padding, the form BUD-11 specifies, or as

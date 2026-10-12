@@ -1,8 +1,10 @@
-# 0038. The package names the kinds a NIP or a common standard defines, every one the PHP core names, and no application's private kind
+# 0044. The package names the kinds a NIP or a common standard defines, every one the PHP core names, and no application's private kind
 
 ## Status
 
 Accepted
+
+Supersedes ADR-0038. Carried forward unchanged: `src/domain/value-object/kinds.ts` names a kind only when a NIP defines it, or another common standard defines it and the NIP registry lists it; each constant's doc names the NIP or standard that defines it; an application's private kind is defined in that application. Revised: the package names every kind innis/nostr-core's `EventKind` names, under the name `EventKind` gives it, and the two lists are kept equal, a kind added to one core being added to the other in the same change set, where ADR-0038 only bounded which kinds the package may name and the two cores' lists drifted within that bound. This record holds the complete current decision.
 
 ## Context
 

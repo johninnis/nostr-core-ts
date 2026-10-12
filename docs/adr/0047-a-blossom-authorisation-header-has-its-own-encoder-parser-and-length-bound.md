@@ -1,14 +1,16 @@
-# 0039. A Blossom authorisation header has its own encoder and parser beside the NIP-98 pair, and its own length bound
+# 0047. A Blossom authorisation header has its own encoder and parser beside the NIP-98 pair, and its own length bound
 
 ## Status
 
 Accepted
 
+Supersedes ADR-0039. Carried forward unchanged: `encodeBlossomAuthHeader` and `parseBlossomAuthHeader` are a second pair beside the NIP-98 `encodeAuthHeader` and `parseAuthHeader`; a Blossom header is written in canonical unpadded base64url and read in that or in canonical padded standard base64, any other spelling refused as `header-bad-base64`; both parsers run one private pipeline and both encoders share one length check; the failure vocabulary stays `AuthHeaderDecodeFailure`; `parseAuthHeader` never reads base64url. Revised: a Blossom header has its own length bound, 8000 characters, applied on writing and on reading (shared ADR-0106), where ADR-0039 bounded it at NIP-98's 4096 characters. This record holds the complete current decision.
+
 ## Context
 
 `encodeAuthHeader` and `parseAuthHeader` wrote and read the `Authorization: Nostr <credentials>` header as one wire format for two protocols, NIP-98 and Blossom, its credentials in canonical padded standard base64 only (ADR-0004). BUD-11 now says a Blossom token "MUST be encoded as Base64 URL-safe without padding (Base64url, as used by JWTs)", while NIP-98 keeps standard base64. `parseAuthHeader` therefore refuses every BUD-11 client, and `encodeAuthHeader` writes a Blossom token in a form BUD-11 no longer specifies. Shared ADR-0111 decides the wire rule: a Blossom header is written in canonical unpadded base64url and read in that or in canonical padded standard base64, the form every Blossom client wrote before BUD-11; NIP-98 is unchanged. BUD-11's own example decodes in its form, but its payload carries `//` comments, so it is not JSON and is refused as such.
 
-A Blossom token grows with the blobs it names: each `x` tag adds about 97 characters to the encoded header, so under NIP-98's 4096 characters a token naming more than about 36 blobs did not fit, and a client deleting or authorising a batch had to split it. Common HTTP servers refuse a single header line past about 8 KiB. Shared ADR-0106 bounds a Blossom header at 8000 characters, within that line, which fits a token naming about 80 blobs; NIP-98's event is fixed in size by one URL, and its bound stays 4096.
+A Blossom token grows with the blobs it names: each `x` tag adds about 97 characters to the encoded header, so under NIP-98's 4096 characters a token naming more than about 36 blobs did not fit, and a client deleting or authorising a batch had to split it. Common HTTP servers refuse a single header line past about 8 KiB. Shared ADR-0106 bounds a Blossom header at 8000 characters, within that line, which fits a token naming about 80 blobs; NIP-98's event is fixed in size by one URL, and its bound stays 4096. ADR-0039 bounded both headers at 4096 characters.
 
 Three shapes were weighed for the second pair:
 

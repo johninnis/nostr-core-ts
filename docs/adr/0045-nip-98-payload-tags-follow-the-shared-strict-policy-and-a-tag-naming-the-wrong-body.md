@@ -1,8 +1,10 @@
-# 0011. NIP-98 payload tags follow the shared strict policy, and a tag naming the wrong body is `payload-mismatch` on any body
+# 0045. NIP-98 payload tags follow the shared strict policy, and a tag naming the wrong body is `payload-mismatch` on any body
 
 ## Status
 
 Accepted
+
+Supersedes ADR-0011. Carried forward unchanged: `checkNip98Event`, and through it `createNip98Validator`, returns its payload refusals as `Nip98ValidationFailure` literals a server can switch on, and matches the hash in constant time; `payload-missing` is no tag on a non-empty body and `payload-disagreeing` tags stating more than one value; `validateAuthHeader` and `buildNip98AuthEvent` hash the body they are given, `validate` takes the body's hash from its caller, and the hash of the empty body is read as no body; `buildNip98AuthEvent` writes the tag only for a non-empty body. Revised: an empty body admits a `payload` tag holding the empty body's hash, as shared ADR-0024 now decides, and a tag holding any other hash is `payload-mismatch` whatever the body, where ADR-0011 refused every `payload` tag on an empty body, the empty body's hash included, as `payload-unexpected`; that literal is gone. This record holds the complete current decision.
 
 ## Context
 
