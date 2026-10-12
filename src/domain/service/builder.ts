@@ -109,11 +109,12 @@ export const buildReaction = (
  * Build `author`'s NIP-09 kind 5 deletion request for `target`, which must be a published event of theirs: an `e` tag
  * with its id; for a replaceable or addressable event also an `a` tag with its coordinate, which asks relays to delete
  * every version up to the request's `created_at`, while the `e` tag lets a client checking `#e` for the version it
- * shows find the request (shared ADR-0016); and a `k` tag naming its kind (NIP-09: requests "SHOULD include a `k`
- * tag"). Throws `InvalidArgumentError` when `target` is another author's event: a deletion request names
- * only events "that have an identical `pubkey` as the deletion request" (NIP-09, shared ADR-0086). Throws it too when
- * `target` is itself a deletion request: "Publishing a deletion request event against a deletion request has no
- * effect" (NIP-09, shared ADR-0093), so the request would be a no-op.
+ * shows find the request (shared ADR-0124); and a `k` tag naming its kind (NIP-09: requests "SHOULD include a `k`
+ * tag"). Throws `InvalidArgumentError` when `target` is another author's event: a deletion request names only events
+ * "that have an identical `pubkey` as the deletion request" (NIP-09), and a recipient's deletion of a gift wrap
+ * addressed to it is refused too, because the public request leaks that its key received the wrap (shared ADR-0125).
+ * Throws it too when `target` is itself a deletion request: "Publishing a deletion request event against a deletion
+ * request has no effect" (NIP-09, shared ADR-0093), so the request would be a no-op.
  */
 export const buildDeletion = (author: PublicKey, target: NostrEvent): UnsignedEvent => {
   if (target.pubkey !== author) {

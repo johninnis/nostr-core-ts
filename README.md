@@ -86,7 +86,7 @@ Each returns an `UnsignedEvent` to hand to a `Signer`. A builder that answers or
 | `buildReply` | `(content, parent, hint?)` — the one reply builder: a kind 1, 9, 42 or 1311 parent is answered in its own kind, anything else by a NIP-22 kind 1111 comment (ADR-0028, shared ADR-0076) |
 | `buildReaction` | `(target, reaction = "+", relay?)` — NIP-25 kind 7: `["e", id, relay, author]`, `["p", author, relay?]`, `["k", kind]`, and `["a", coordinate, relay, author]` for an addressable target only (NIP-25 asks for `a` only there, shared ADR-0077) |
 | `buildRepost` | `(target: NostrEvent, relay)` — NIP-18 kind 6 for a kind 1 note, else kind 16 with `k`; the `e` tag carries the required relay, a replaceable or addressable target also gets `a`; the content is the target's JSON, empty for a NIP-70 protected event, one carrying any tag named `-` (shared ADR-0078) |
-| `buildDeletion` | `(author, target)` — a published event of `author`'s: its `e` id, its `a` coordinate as well when replaceable or addressable, and a `k` tag (NIP-09, shared ADR-0016); throws `InvalidArgumentError` for another author's event (shared ADR-0086) |
+| `buildDeletion` | `(author, target)` — a published event of `author`'s: its `e` id, its `a` coordinate as well when replaceable or addressable, and a `k` tag (NIP-09, shared ADR-0124); throws `InvalidArgumentError` for another author's event (shared ADR-0125) |
 | `buildHighlightFromUrl` | `(text, sourceUrl, comment?)` — the source, an `HttpUrl`, is `["r", url, "source"]` (NIP-84) |
 | `buildHighlightFromEvent` | `(text, source)` — the source event's `a` coordinate when it has one, its `e` id and its author's `p` (NIP-84) |
 | `buildClientAuth` | `(relay, challenge: AuthChallenge)` — NIP-42 |
