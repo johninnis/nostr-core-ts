@@ -38,6 +38,7 @@ export type { BuildDraftWrapInput, BuildLongformInput, BuildZapRequestInput } fr
 export { buildReply } from "./reply.ts"
 export type { ReplyHint } from "./reply.ts"
 
+export { buildDeletionLookupFilters, deletedCoordinates, deletionCovers } from "./deletion.ts"
 export { serialiseEvent } from "./event-json.ts"
 export type { EventToSign } from "./event-id.ts"
 export {
