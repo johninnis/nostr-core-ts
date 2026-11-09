@@ -1,5 +1,5 @@
 {
-  "source": "innis/nostr-core CashuDleqVerifier and @innis/nostr-core verifyNutzapDleq: NUT-00 hash_to_curve, each message as hex with its point, and NUT-12 DLEQ proofs a receiver checks, each with the mint key for its amount and whether it verifies (shared ADR-0121). The P2PK-locked proofs were signed with the NUT-12 deterministic nonce and checked with cashu-ts hasValidDleq; keysResponse is the NUT-01 keys response of their keyset",
+  "source": "innis/nostr-core CashuDleqVerifier and @innis/nostr-core verifyNutzapDleq: NUT-00 hash_to_curve, each message as hex with its point, and NUT-12 DLEQ proofs a receiver checks, each with the mint key for its amount and whether it verifies (shared ADR-0128). The P2PK-locked proofs were signed with the NUT-12 deterministic nonce and checked with cashu-ts hasValidDleq; keysResponse is the NUT-01 keys response of their keyset",
   "hashToCurve": [
     [
       "0000000000000000000000000000000000000000000000000000000000000000",

@@ -1,3 +1,4 @@
+import { sha256Hex } from "../../src/domain/service/sha256.ts"
 import { assertEquals } from "@std/assert"
 import type { NutzapProof } from "../../src/domain/service/zap-parser.ts"
 import type { Tag } from "../../src/domain/value-object/nostr-event.ts"
@@ -30,7 +31,7 @@ Deno.test("parseNutzap - a p tag that is no public key names no recipient", () =
   assertEquals(nutzapOf([["p", RECIPIENT.toUpperCase()]]).recipient, null)
 })
 
-Deno.test("parseNutzap - its mint is its u tag kept exactly as written (shared ADR-0121)", () => {
+Deno.test("parseNutzap - its mint is its u tag kept exactly as written (shared ADR-0128)", () => {
   assertEquals(nutzapOf([["u", "HTTPS://Mint.example"]]).mint, "HTTPS://Mint.example")
 })
 
@@ -46,7 +47,7 @@ for (
     ["a u tag that is no web URL", [["u", "wss://mint.example"]]],
   ] as const
 ) {
-  Deno.test(`parseNutzap - a nutzap with ${what} names no mint (shared ADR-0121)`, () => {
+  Deno.test(`parseNutzap - a nutzap with ${what} names no mint (shared ADR-0128)`, () => {
     assertEquals(nutzapOf(tags).mint, null)
   })
 }
@@ -56,7 +57,7 @@ Deno.test("parseNutzap - its proofs are the proof tags that state an amount (sha
   assertEquals(nutzap.proofs.map((proof) => proof.amount), [10, 5])
 })
 
-Deno.test("parseNutzap - each proof carries the key its secret locks it to (shared ADR-0121)", () => {
+Deno.test("parseNutzap - each proof carries the key its secret locks it to (shared ADR-0128)", () => {
   assertEquals(nutzapOf([proofTag(10)]).proofs[0]?.lockKey, P2PK_KEY)
 })
 
@@ -73,15 +74,15 @@ Deno.test("parseNutzap - a nutzap without proof tags has no proofs", () => {
   assertEquals(nutzapOf([["p", RECIPIENT]]).proofs, [])
 })
 
-Deno.test("parseNutzap - a proof carries its keyset id as written (shared ADR-0121)", () => {
+Deno.test("parseNutzap - a proof carries its keyset id as written (shared ADR-0128)", () => {
   assertEquals(proofOf(proofTag(21))?.keysetId, KEYSET_ID)
 })
 
-Deno.test("parseNutzap - a proof carries its secret as written (shared ADR-0121)", () => {
-  assertEquals(proofOf(proofTag(21))?.secret, secretFor(`02${P2PK_KEY}`))
+Deno.test("parseNutzap - a proof carries its secret as written (shared ADR-0128)", () => {
+  assertEquals(proofOf(proofTag(21))?.secret, secretFor(`02${P2PK_KEY}`, sha256Hex("21")))
 })
 
-Deno.test("parseNutzap - a proof carries its unblinded signature as written (shared ADR-0121)", () => {
+Deno.test("parseNutzap - a proof carries its unblinded signature as written (shared ADR-0128)", () => {
   assertEquals(proofOf(proofTag(21))?.unblindedSignature, UNBLINDED_SIGNATURE)
 })
 

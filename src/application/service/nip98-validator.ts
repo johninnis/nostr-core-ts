@@ -8,6 +8,7 @@ import { sha256Hex } from "../../domain/service/sha256.ts"
 import type { Clock } from "../../domain/service/timestamp.ts"
 import { now } from "../../domain/service/timestamp.ts"
 import { InvalidArgumentError } from "../../domain/exception/invalid-argument-error.ts"
+import type { HttpMethod } from "../../domain/value-object/http-method.ts"
 import type { HttpUrl } from "../../domain/value-object/http-url.ts"
 import type { PublicKey } from "../../domain/value-object/public-key.ts"
 import type { Result } from "../../domain/value-object/result.ts"
@@ -26,7 +27,7 @@ export const DEFAULT_TIMESTAMP_TOLERANCE_SECONDS = 60
 export interface ValidateAuthHeaderRequest {
   readonly authHeader: string
   readonly url: HttpUrl
-  readonly method: string
+  readonly method: HttpMethod
   readonly body: string | Uint8Array
 }
 

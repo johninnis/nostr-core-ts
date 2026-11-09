@@ -24,6 +24,8 @@ export type { NostrFilter } from "./nostr-filter.ts"
 export type { PublicKey } from "./public-key.ts"
 export { isValidPublicKey, parsePublicKey } from "./public-key.ts"
 
+export type { HttpMethod } from "./http-method.ts"
+export { httpMethodFrom, isValidHttpMethod, parseHttpMethod } from "./http-method.ts"
 export type { HttpUrl } from "./http-url.ts"
 export { isValidHttpUrl, parseHttpUrl } from "./http-url.ts"
 export type { WebUrl } from "./web-url.ts"

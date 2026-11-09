@@ -50,7 +50,7 @@ export const hashToCurve = (message: Uint8Array): CurvePoint | null => {
   return null
 }
 
-// Deliberate: a point is read only compressed, as NUT-00 writes one, though cashu-ts also reads it uncompressed — see shared ADR-0121
+// Deliberate: a point is read only compressed, as NUT-00 writes one, though cashu-ts also reads it uncompressed — see shared ADR-0128
 const pointOf = (hex: string | null): CurvePoint | null => {
   const bytes = hex === null ? null : parseHex(lowerAscii(hex))
   return bytes === null ? null : compressedPointOf(bytes)
@@ -92,7 +92,7 @@ const reproducesItsChallenge = (statement: DleqStatement): boolean => {
 
 /**
  * Whether `proof` carries a NUT-12 DLEQ proof that `mintKey` signed it, checked as NUT-12's receiving user "Carol"
- * checks one (shared ADR-0121): with `Y = hash_to_curve(secret)`, `C' = C + r·A` and `B' = Y + r·G`, the challenge `e`
+ * checks one (shared ADR-0128): with `Y = hash_to_curve(secret)`, `C' = C + r·A` and `B' = Y + r·G`, the challenge `e`
  * must be the SHA-256 of the uncompressed hex of `s·G − e·A`, `s·B' − e·C'`, `A` and `C'`. The mint key and `C` must be
  * compressed points in hex of either case, `e`, `s` and `r` 32 bytes of hex of either case from 1 to n − 1, and the
  * secret, `C` and every DLEQ field present; a point at infinity along the way fails the check. Total: `false` for

@@ -22,7 +22,7 @@ for (
     ["a value that is no key beside one that is", [["pubkey", "not a key"], ["pubkey", P2PK_KEY]]],
   ] as const
 ) {
-  Deno.test(`parseNutzapInfo - reads its P2PK key from ${what} (shared ADR-0121)`, () => {
+  Deno.test(`parseNutzapInfo - reads its P2PK key from ${what} (shared ADR-0128)`, () => {
     assertEquals(infoOf(tags)?.p2pkPubkey, P2PK_KEY)
   })
 }
@@ -35,7 +35,7 @@ for (
     ["a 04-prefixed key", [["pubkey", `04${P2PK_KEY}`]]],
   ] as const
 ) {
-  Deno.test(`parseNutzapInfo - an event with ${what} is no nutzap info (shared ADR-0121)`, () => {
+  Deno.test(`parseNutzapInfo - an event with ${what} is no nutzap info (shared ADR-0128)`, () => {
     assertEquals(infoOf(tags), null)
   })
 }
@@ -51,7 +51,7 @@ Deno.test("parseNutzapInfo - another kind is no nutzap info", () => {
   )
 })
 
-Deno.test("parseNutzapInfo - lists each mint once as written and drops what is no web URL (shared ADR-0121)", () => {
+Deno.test("parseNutzapInfo - lists each mint once as written and drops what is no web URL (shared ADR-0128)", () => {
   const info = infoOf([
     ["pubkey", P2PK_KEY],
     ["mint", "https://mint.example", "usd", "sat"],

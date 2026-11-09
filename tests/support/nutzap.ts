@@ -1,3 +1,4 @@
+import { sha256Hex } from "../../src/domain/service/sha256.ts"
 import { parseNutzap } from "../../src/domain/service/zap-parser.ts"
 import type { Nutzap } from "../../src/domain/service/zap-parser.ts"
 import { parseNutzapInfo } from "../../src/domain/service/nutzap-info.ts"
@@ -28,8 +29,10 @@ export const DLEQ_S = "2".repeat(64)
 export const DLEQ_R = "3".repeat(64)
 
 /** A NUT-10 P2PK secret whose `data` is `lockKey`, as written. */
-export const secretFor = (lockKey: string): string =>
-  JSON.stringify(["P2PK", { nonce: "b00bdd0467b0090a25bdf2d2f0d45ac4e355c482c1418350f273a04fedaaee83", data: lockKey }])
+export const secretFor = (
+  lockKey: string,
+  nonce = "b00bdd0467b0090a25bdf2d2f0d45ac4e355c482c1418350f273a04fedaaee83",
+): string => JSON.stringify(["P2PK", { nonce, data: lockKey }])
 
 /**
  * A `proof` tag stating `amount` whose secret locks it to `lockKey`, the recipient's key by default, with the fixture
@@ -40,7 +43,7 @@ export const proofTag = (amount: number, lockKey = `02${P2PK_KEY}`): Tag => [
   JSON.stringify({
     amount,
     id: KEYSET_ID,
-    secret: secretFor(lockKey),
+    secret: secretFor(lockKey, sha256Hex(String(amount))),
     C: UNBLINDED_SIGNATURE,
     dleq: { e: DLEQ_E, s: DLEQ_S, r: DLEQ_R },
   }),

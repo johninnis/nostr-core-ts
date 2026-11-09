@@ -14,6 +14,7 @@ import {
   proofTag,
   RECIPIENT,
   recipientsInfo,
+  secretFor,
 } from "../support/nutzap.ts"
 
 const STRANGER = "c".repeat(64)
@@ -36,7 +37,28 @@ Deno.test("verifyNutzap - every proof locked to the recipient's key verifies", (
   assertEquals<Verification>(verifyNutzap(nutzap, recipientsInfo()), ok(nutzap))
 })
 
-Deno.test("verifyNutzap - a lock written with an odd prefix verifies as the same key (shared ADR-0121)", () => {
+Deno.test("verifyNutzap - a proof respelled in other whitespace is a proof repeated (shared ADR-0131)", () => {
+  const nutzap = payingNutzap([["proof", ` ${proofTag(21)[1]}`]])
+  assertEquals<Verification>(verifyNutzap(nutzap, recipientsInfo()), failure("proof-repeated"))
+})
+
+Deno.test("verifyNutzap - two proofs naming one secret with different amounts are a proof repeated (shared ADR-0131)", () => {
+  const secret = secretFor(`02${P2PK_KEY}`)
+  const nutzap = nutzapOf([
+    ["p", RECIPIENT],
+    ["u", MINT],
+    ["proof", JSON.stringify({ amount: 1, secret })],
+    ["proof", JSON.stringify({ amount: 1000, secret })],
+  ])
+  assertEquals<Verification>(verifyNutzap(nutzap, recipientsInfo()), failure("proof-repeated"))
+})
+
+Deno.test("verifyNutzap - a byte-identical proof tag is one proof and verifies (shared ADR-0080)", () => {
+  const nutzap = payingNutzap([proofTag(21)])
+  assertEquals<Verification>(verifyNutzap(nutzap, recipientsInfo()), ok(nutzap))
+})
+
+Deno.test("verifyNutzap - a lock written with an odd prefix verifies as the same key (shared ADR-0128)", () => {
   const nutzap = nutzapOf([["p", RECIPIENT], ["u", MINT], proofTag(21, `03${P2PK_KEY}`)])
   assertEquals<Verification>(verifyNutzap(nutzap, recipientsInfo()), ok(nutzap))
 })
@@ -54,7 +76,7 @@ Deno.test("verifyNutzap - a mint the info does not list is not listed", () => {
   assertEquals(verifyNutzap(nutzap, recipientsInfo()), failure("mint-not-listed"))
 })
 
-Deno.test("verifyNutzap - a listed mint written another way is not listed (shared ADR-0121)", () => {
+Deno.test("verifyNutzap - a listed mint written another way is not listed (shared ADR-0128)", () => {
   const nutzap = nutzapOf([["p", RECIPIENT], ["u", "HTTPS://mint.example"], proofTag(21)])
   assertEquals(verifyNutzap(nutzap, recipientsInfo()), failure("mint-not-listed"))
 })
@@ -78,7 +100,7 @@ Deno.test("verifyNutzap - a proof locked to the recipient's Nostr key is not loc
   assertEquals(verifyNutzap(nutzap, recipientsInfo()), failure("proof-not-locked-to-recipient"))
 })
 
-Deno.test("verifyNutzap - a proof the sender can also spend is not locked to the recipient (shared ADR-0121)", () => {
+Deno.test("verifyNutzap - a proof the sender can also spend is not locked to the recipient (shared ADR-0128)", () => {
   const secret = JSON.stringify(["P2PK", {
     nonce: "n",
     data: `02${P2PK_KEY}`,

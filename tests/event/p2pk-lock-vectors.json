@@ -1,5 +1,5 @@
 {
-  "source": "innis/nostr-core P2pkSecretParser::tryParseLockKey and @innis/nostr-core parseP2pkLockKey, each Cashu proof secret with the x-coordinate of the one key it locks a nutzap proof to, or null for none (shared ADR-0121)",
+  "source": "innis/nostr-core P2pkSecretParser::tryParseLockKey and @innis/nostr-core parseP2pkLockKey, each Cashu proof secret with the x-coordinate of the one key it locks a nutzap proof to, or null for none (shared ADR-0128)",
   "vectors": [
     [
       "[\"P2PK\",{\"nonce\":\"b00bdd0467b0090a25bdf2d2f0d45ac4e355c482c1418350f273a04fedaaee83\",\"data\":\"02eaee8939e3565e48cc62967e2fde9d8e2a4b3ec0081f29eceff5c64ef10ac1ed\"}]",
@@ -27,7 +27,7 @@
     ],
     [
       "[\"P2PK\",{\"nonce\":\"b00bdd0467b0090a25bdf2d2f0d45ac4e355c482c1418350f273a04fedaaee83\",\"data\":\"02eaee8939e3565e48cc62967e2fde9d8e2a4b3ec0081f29eceff5c64ef10ac1ed\",\"tags\":[[\"Pubkeys\",\"0249098aa8b9d2fbec49ff8598feb17b592b986e62319a4fa488a3dc36387157a7\"]]}]",
-      "eaee8939e3565e48cc62967e2fde9d8e2a4b3ec0081f29eceff5c64ef10ac1ed"
+      null
     ],
     [
       "[\"P2PK\",{\"data\":\"02eaee8939e3565e48cc62967e2fde9d8e2a4b3ec0081f29eceff5c64ef10ac1ed\",\"nonce\":\"b00bdd0467b0090a25bdf2d2f0d45ac4e355c482c1418350f273a04fedaaee83\"}]",
@@ -187,6 +187,58 @@
     ],
     [
       "",
+      null
+    ],
+    [
+      "[\"P2PK\",{\"nonce\":\"b00bdd0467b0090a25bdf2d2f0d45ac4e355c482c1418350f273a04fedaaee83\",\"data\":\"02eaee8939e3565e48cc62967e2fde9d8e2a4b3ec0081f29eceff5c64ef10ac1ed\",\"tags\":[[\"n_sigs\",\"1\"]]}]",
+      "eaee8939e3565e48cc62967e2fde9d8e2a4b3ec0081f29eceff5c64ef10ac1ed"
+    ],
+    [
+      "[\"P2PK\",{\"nonce\":\"b00bdd0467b0090a25bdf2d2f0d45ac4e355c482c1418350f273a04fedaaee83\",\"data\":\"02eaee8939e3565e48cc62967e2fde9d8e2a4b3ec0081f29eceff5c64ef10ac1ed\",\"tags\":[[\"sigflag\",\"SIG_INPUTS\"],[\"n_sigs\",\"1\"]]}]",
+      "eaee8939e3565e48cc62967e2fde9d8e2a4b3ec0081f29eceff5c64ef10ac1ed"
+    ],
+    [
+      "[\"P2PK\",{\"nonce\":\"b00bdd0467b0090a25bdf2d2f0d45ac4e355c482c1418350f273a04fedaaee83\",\"data\":\"02eaee8939e3565e48cc62967e2fde9d8e2a4b3ec0081f29eceff5c64ef10ac1ed\",\"tags\":[[\"n_sigs\",\"2\"]]}]",
+      null
+    ],
+    [
+      "[\"P2PK\",{\"nonce\":\"b00bdd0467b0090a25bdf2d2f0d45ac4e355c482c1418350f273a04fedaaee83\",\"data\":\"02eaee8939e3565e48cc62967e2fde9d8e2a4b3ec0081f29eceff5c64ef10ac1ed\",\"tags\":[[\"n_sigs\",\"0\"]]}]",
+      null
+    ],
+    [
+      "[\"P2PK\",{\"nonce\":\"b00bdd0467b0090a25bdf2d2f0d45ac4e355c482c1418350f273a04fedaaee83\",\"data\":\"02eaee8939e3565e48cc62967e2fde9d8e2a4b3ec0081f29eceff5c64ef10ac1ed\",\"tags\":[[\"n_sigs\",\"01\"]]}]",
+      null
+    ],
+    [
+      "[\"P2PK\",{\"nonce\":\"b00bdd0467b0090a25bdf2d2f0d45ac4e355c482c1418350f273a04fedaaee83\",\"data\":\"02eaee8939e3565e48cc62967e2fde9d8e2a4b3ec0081f29eceff5c64ef10ac1ed\",\"tags\":[[\"n_sigs\",\"1\",\"2\"]]}]",
+      null
+    ],
+    [
+      "[\"P2PK\",{\"nonce\":\"b00bdd0467b0090a25bdf2d2f0d45ac4e355c482c1418350f273a04fedaaee83\",\"data\":\"02eaee8939e3565e48cc62967e2fde9d8e2a4b3ec0081f29eceff5c64ef10ac1ed\",\"tags\":[[\"n_sigs_refund\",\"1\"]]}]",
+      null
+    ],
+    [
+      "[\"P2PK\",{\"nonce\":\"b00bdd0467b0090a25bdf2d2f0d45ac4e355c482c1418350f273a04fedaaee83\",\"data\":\"02eaee8939e3565e48cc62967e2fde9d8e2a4b3ec0081f29eceff5c64ef10ac1ed\",\"tags\":[[\"future_spender\",\"02cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd\"]]}]",
+      null
+    ],
+    [
+      "[\"P2PK\",{\"nonce\":\"b00bdd0467b0090a25bdf2d2f0d45ac4e355c482c1418350f273a04fedaaee83\",\"data\":\"02eaee8939e3565e48cc62967e2fde9d8e2a4b3ec0081f29eceff5c64ef10ac1ed\",\"tags\":[[\"sigflag\",\"SIG_NONE\"]]}]",
+      null
+    ],
+    [
+      "[\"P2PK\",{\"nonce\":\"b00bdd0467b0090a25bdf2d2f0d45ac4e355c482c1418350f273a04fedaaee83\",\"data\":\"02eaee8939e3565e48cc62967e2fde9d8e2a4b3ec0081f29eceff5c64ef10ac1ed\",\"tags\":[[\"sigflag\",\"SIG_INPUTS\"],[\"sigflag\",\"SIG_INPUTS\"]]}]",
+      null
+    ],
+    [
+      "[\"P2PK\",{\"nonce\":\"b00bdd0467b0090a25bdf2d2f0d45ac4e355c482c1418350f273a04fedaaee83\",\"data\":\"02eaee8939e3565e48cc62967e2fde9d8e2a4b3ec0081f29eceff5c64ef10ac1ed\",\"tags\":[[\"sigflag\",\"SIG_INPUTS\"],[\"sigflag\",\"SIG_ALL\"]]}]",
+      null
+    ],
+    [
+      "[\"P2PK\",{\"nonce\":\"b00bdd0467b0090a25bdf2d2f0d45ac4e355c482c1418350f273a04fedaaee83\",\"data\":\"02eaee8939e3565e48cc62967e2fde9d8e2a4b3ec0081f29eceff5c64ef10ac1ed\",\"tags\":[[\"n_sigs\",\"1\"],[\"n_sigs\",\"1\"]]}]",
+      null
+    ],
+    [
+      "[\"P2PK\",{\"nonce\":\"b00bdd0467b0090a25bdf2d2f0d45ac4e355c482c1418350f273a04fedaaee83\",\"data\":\"02eaee8939e3565e48cc62967e2fde9d8e2a4b3ec0081f29eceff5c64ef10ac1ed\",\"tags\":[[\"sigflag\"]]}]",
       null
     ]
   ]

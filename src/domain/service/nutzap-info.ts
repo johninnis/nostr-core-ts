@@ -11,7 +11,7 @@ import type { WebUrl } from "../value-object/web-url.ts"
 import { parseWebUrl } from "../value-object/web-url.ts"
 
 /**
- * A NIP-61 kind 10019 nutzap informational event as `parseNutzapInfo` read it (shared ADR-0121): its author
+ * A NIP-61 kind 10019 nutzap informational event as `parseNutzapInfo` read it (shared ADR-0128): its author
  * (`pubkey`), the one key nutzaps to that author are P2PK-locked to (`p2pkPubkey`, an x-coordinate), the mints it takes
  * nutzaps at, each kept as written and listed once, and the relays it reads them from, each canonical and listed once.
  */
@@ -24,9 +24,9 @@ export interface NutzapInfo {
 
 const xCoordinateOf = (key: string): PublicKey | null => parseCompressedKey(key) ?? parsePublicKey(lowerAscii(key))
 
-// Deliberate: no one P2PK key, or the author's own, is no nutzap info, never a fall-back to the author's key — see shared ADR-0121
+// Deliberate: no one P2PK key, or the author's own, is no nutzap info, never a fall-back to the author's key — see shared ADR-0128
 /**
- * Read a kind 10019 event as a recipient's nutzap info (NIP-61, shared ADR-0121). Its `pubkey` tags are one claim
+ * Read a kind 10019 event as a recipient's nutzap info (NIP-61, shared ADR-0128). Its `pubkey` tags are one claim
  * (shared ADR-0014) in the key's x-coordinate, written bare or with a `02` or `03` prefix, in either case of hex; a value
  * that is no key takes no part. Its `mint` tags are read as `http` or `https` URLs kept as written, its `relay` tags as
  * canonical relay URLs, each once, dropping any other value; the units a `mint` tag lists are not read. Returns `null`

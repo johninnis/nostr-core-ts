@@ -1,3 +1,4 @@
+import { httpMethodFrom } from "../../src/domain/value-object/http-method.ts"
 import { assertEquals } from "@std/assert"
 import {
   createNip98Validator,
@@ -56,7 +57,7 @@ for (const [description, claimed, requested, expected] of U_BINDING) {
     const result = await validator.validate({
       event: await signedAuth(claimed),
       url: httpUrlFixture(requested),
-      method: "GET",
+      method: httpMethodFrom("GET"),
     })
     assertEquals(result.success ? "accepted" : result.error, expected)
   })

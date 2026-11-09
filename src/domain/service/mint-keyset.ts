@@ -3,7 +3,7 @@ import { isRecord, isString } from "./guards.ts"
 import type { WebUrl } from "../value-object/web-url.ts"
 
 /**
- * A Cashu keyset as its mint serves it (NUT-01, NUT-02; shared ADR-0121): its keyset `id` and the `unit` its amounts
+ * A Cashu keyset as its mint serves it (NUT-01, NUT-02; shared ADR-0128): its keyset `id` and the `unit` its amounts
  * are in, each as written, and its `keys`, the mint's public key for each amount, as written.
  */
 export interface MintKeyset {
@@ -17,7 +17,7 @@ const QUERY_OR_FRAGMENT = /[?#]/
 const KEYS_PATH = "/v1/keys/"
 const SLASH = "/"
 
-// Deliberate: a key is kept as written, unchecked, since whether it is a curve point is the DLEQ check's alone — see shared ADR-0121
+// Deliberate: a key is kept as written, unchecked, since whether it is a curve point is the DLEQ check's alone — see shared ADR-0128
 const mintKeysOf = (keys: Readonly<Record<string, unknown>>): ReadonlyMap<number, string> =>
   new Map(
     Object.entries(keys).flatMap(([amount, key]) => {
@@ -33,7 +33,7 @@ const mintKeysetOf = (keyset: unknown): MintKeyset | null =>
 
 /**
  * Read a mint's keys response — the JSON body of NUT-01's `GET /v1/keys` or NUT-02's `GET /v1/keys/{keyset_id}`,
- * already decoded — as its keysets, in the order it lists them, without throwing (shared ADR-0121). Anything that is not
+ * already decoded — as its keysets, in the order it lists them, without throwing (shared ADR-0128). Anything that is not
  * an object with a `keysets` array reads as no keysets; a keyset whose `id` or `unit` is not a string, or whose `keys`
  * is not an object, is dropped. A key is kept only when its amount is canonical decimal digits naming a safe integer,
  * the range a proof's amount is read in, and its value is a string, kept as written: whether it is a curve point is

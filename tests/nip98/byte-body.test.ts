@@ -1,3 +1,4 @@
+import { httpMethodFrom } from "../../src/domain/value-object/http-method.ts"
 import { assertEquals } from "@std/assert"
 import { createNip98Validator } from "../../src/application/service/nip98-validator.ts"
 import type { Nip98ReplayGuard } from "../../src/application/port/nip98-replay-guard.ts"
@@ -32,7 +33,7 @@ const validate = async (body: Uint8Array, payloadHash: string) =>
   await createNip98Validator(acceptEveryEvent, 60, () => AT).validateAuthHeader({
     authHeader: await authHeaderFor(payloadHash),
     url: TARGET_URL,
-    method: "POST",
+    method: httpMethodFrom("POST"),
     body,
   })
 

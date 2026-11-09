@@ -1,3 +1,4 @@
+import { httpMethodFrom } from "../../src/domain/value-object/http-method.ts"
 import { assertEquals } from "@std/assert"
 import { base64 } from "@scure/base"
 import {
@@ -39,7 +40,7 @@ const outcome = async (payload?: string, bodyHash?: string): Promise<Nip98Valida
   const result = await validator.validate({
     event: await signedAuth(payload),
     url: REQUEST_URL,
-    method: "POST",
+    method: httpMethodFrom("POST"),
     bodyHash,
   })
   return result.success ? "accepted" : result.error
@@ -60,7 +61,12 @@ Deno.test("validate - no body admits a payload tag holding the empty body's hash
 Deno.test("validateAuthHeader - admits a payload tag carrying the empty-string hash on an empty body (shared ADR-0024)", async () => {
   const header = "Nostr " + base64.encode(new TextEncoder().encode(JSON.stringify(await signedAuth(EMPTY_BODY_HASH))))
 
-  const result = await validator.validateAuthHeader({ authHeader: header, url: REQUEST_URL, method: "POST", body: "" })
+  const result = await validator.validateAuthHeader({
+    authHeader: header,
+    url: REQUEST_URL,
+    method: httpMethodFrom("POST"),
+    body: "",
+  })
   assertEquals(result.success, true)
 })
 

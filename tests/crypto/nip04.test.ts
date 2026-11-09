@@ -213,17 +213,17 @@ Deno.test("nip04Decrypt - a peer key that is not 64 lowercase hex characters is 
   assertThrows(() => nip04Decrypt(BOB.sk, NOT_A_PUBKEY, payload), InvalidArgumentError)
 })
 
-Deno.test("nip04Decrypt - an iv whose base64 sets its unused trailing bits fails, being no canonical encoding (shared ADR-0095)", () => {
+Deno.test("nip04Decrypt - an iv whose base64 sets its unused trailing bits fails, being no canonical encoding (shared ADR-0132)", () => {
   const [ct = "", iv = ""] = nip04Encrypt(ALICE.sk, BOB.pk, "hello bob").split("?iv=")
   assertOneFailure(`${ct}?iv=${withTrailingBitSet(iv)}`)
 })
 
-Deno.test("nip04Decrypt - ciphertext whose base64 sets its unused trailing bits fails (shared ADR-0095)", () => {
+Deno.test("nip04Decrypt - ciphertext whose base64 sets its unused trailing bits fails (shared ADR-0132)", () => {
   const [ct = "", iv = ""] = nip04Encrypt(ALICE.sk, BOB.pk, "hello bob").split("?iv=")
   assertOneFailure(`${withTrailingBitSet(ct)}?iv=${iv}`)
 })
 
-Deno.test("nip04Decrypt - unpadded base64 fails (shared ADR-0095)", () => {
+Deno.test("nip04Decrypt - unpadded base64 fails (shared ADR-0132)", () => {
   const [ct = "", iv = ""] = nip04Encrypt(ALICE.sk, BOB.pk, "hello bob").split("?iv=")
   assertOneFailure(`${ct}?iv=${iv.replace(/=+$/, "")}`)
 })

@@ -1,3 +1,4 @@
+import { httpMethodFrom } from "../../src/domain/value-object/http-method.ts"
 import { assertEquals, assertThrows } from "@std/assert"
 import { InvalidArgumentError } from "../../src/domain/exception/invalid-argument-error.ts"
 import { buildNip98AuthEvent } from "../../src/domain/service/nip98-builder.ts"
@@ -7,13 +8,16 @@ import { now } from "../../src/domain/service/timestamp.ts"
 import { httpUrlFixture } from "../../testing.ts"
 
 Deno.test("buildNip98AuthEvent - sets kind 27235 and empty content", () => {
-  const event = buildNip98AuthEvent({ url: httpUrlFixture("https://relay.example"), method: "GET" })
+  const event = buildNip98AuthEvent({ url: httpUrlFixture("https://relay.example"), method: httpMethodFrom("GET") })
   assertEquals(event.kind, KIND_HTTP_AUTH)
   assertEquals(event.content, "")
 })
 
 Deno.test("buildNip98AuthEvent - emits u and method tags", () => {
-  const event = buildNip98AuthEvent({ url: httpUrlFixture("https://relay.example/management"), method: "POST" })
+  const event = buildNip98AuthEvent({
+    url: httpUrlFixture("https://relay.example/management"),
+    method: httpMethodFrom("POST"),
+  })
   const uTag = event.tags.find((t) => t[0] === "u")
   const methodTag = event.tags.find((t) => t[0] === "method")
   assertEquals(uTag?.[1], "https://relay.example/management")
@@ -21,26 +25,36 @@ Deno.test("buildNip98AuthEvent - emits u and method tags", () => {
 })
 
 Deno.test("buildNip98AuthEvent - omits payload tag when no body supplied", () => {
-  const event = buildNip98AuthEvent({ url: httpUrlFixture("https://relay.example"), method: "GET" })
+  const event = buildNip98AuthEvent({ url: httpUrlFixture("https://relay.example"), method: httpMethodFrom("GET") })
   const payloadTag = event.tags.find((t) => t[0] === "payload")
   assertEquals(payloadTag, undefined)
 })
 
 Deno.test("buildNip98AuthEvent - omits payload tag when body is the empty string", () => {
-  const event = buildNip98AuthEvent({ url: httpUrlFixture("https://relay.example"), method: "GET", body: "" })
+  const event = buildNip98AuthEvent({
+    url: httpUrlFixture("https://relay.example"),
+    method: httpMethodFrom("GET"),
+    body: "",
+  })
   const payloadTag = event.tags.find((t) => t[0] === "payload")
   assertEquals(payloadTag, undefined)
 })
 
 Deno.test("buildNip98AuthEvent - hashes the body into the payload tag", () => {
   const body = '{"method":"ping","params":[]}'
-  const event = buildNip98AuthEvent({ url: httpUrlFixture("https://relay.example"), method: "POST", body })
+  const event = buildNip98AuthEvent({
+    url: httpUrlFixture("https://relay.example"),
+    method: httpMethodFrom("POST"),
+    body,
+  })
   const payloadTag = event.tags.find((t) => t[0] === "payload")
   assertEquals(payloadTag?.[1], sha256Hex(body))
 })
 
 const methodWritten = (method: string): string | undefined =>
-  buildNip98AuthEvent({ url: httpUrlFixture("https://relay.example"), method }).tags.find((t) => t[0] === "method")?.[1]
+  buildNip98AuthEvent({ url: httpUrlFixture("https://relay.example"), method: httpMethodFrom(method) }).tags.find((
+    t,
+  ) => t[0] === "method")?.[1]
 
 Deno.test("buildNip98AuthEvent - writes Fetch's six standard methods upper-cased, given in any case (shared ADR-0070)", () => {
   const given = ["delete", "Get", "hEAD", "options", "post", "pUt"]
@@ -51,26 +65,22 @@ Deno.test("buildNip98AuthEvent - writes any other method exactly as given, as Fe
   assertEquals(["patch", "PATCH", "Propfind"].map(methodWritten), ["patch", "PATCH", "Propfind"])
 })
 
-Deno.test("buildNip98AuthEvent - matches a standard method by ASCII letters alone, as Fetch does", () => {
-  assertEquals(methodWritten("po\u017ft"), "po\u017ft")
-})
-
 Deno.test("buildNip98AuthEvent - sets created_at to the current timestamp", () => {
   const before = now()
-  const event = buildNip98AuthEvent({ url: httpUrlFixture("https://relay.example"), method: "GET" })
+  const event = buildNip98AuthEvent({ url: httpUrlFixture("https://relay.example"), method: httpMethodFrom("GET") })
   const after = now()
   assertEquals(event.created_at >= before && event.created_at <= after, true)
 })
 
 Deno.test("buildNip98AuthEvent - omits expiration tag by default", () => {
-  const event = buildNip98AuthEvent({ url: httpUrlFixture("https://relay.example"), method: "GET" })
+  const event = buildNip98AuthEvent({ url: httpUrlFixture("https://relay.example"), method: httpMethodFrom("GET") })
   assertEquals(event.tags.find((t) => t[0] === "expiration"), undefined)
 })
 
 Deno.test("buildNip98AuthEvent - emits expiration tag at created_at + expiresInSeconds", () => {
   const event = buildNip98AuthEvent({
     url: httpUrlFixture("https://relay.example"),
-    method: "GET",
+    method: httpMethodFrom("GET"),
     expiresInSeconds: 300,
   })
   const expirationTag = event.tags.find((t) => t[0] === "expiration")
@@ -80,7 +90,12 @@ Deno.test("buildNip98AuthEvent - emits expiration tag at created_at + expiresInS
 for (const expiresInSeconds of [Number.NaN, 1.5, -1, Number.MAX_SAFE_INTEGER + 1]) {
   Deno.test(`buildNip98AuthEvent - throws InvalidArgumentError for an expiresInSeconds of ${expiresInSeconds}`, () => {
     assertThrows(
-      () => buildNip98AuthEvent({ url: httpUrlFixture("https://relay.example"), method: "GET", expiresInSeconds }),
+      () =>
+        buildNip98AuthEvent({
+          url: httpUrlFixture("https://relay.example"),
+          method: httpMethodFrom("GET"),
+          expiresInSeconds,
+        }),
       InvalidArgumentError,
     )
   })
@@ -91,7 +106,7 @@ Deno.test("buildNip98AuthEvent - throws InvalidArgumentError when the expiration
     () =>
       buildNip98AuthEvent({
         url: httpUrlFixture("https://relay.example"),
-        method: "GET",
+        method: httpMethodFrom("GET"),
         createdAt: Number.MAX_SAFE_INTEGER,
         expiresInSeconds: 1,
       }),
@@ -101,19 +116,23 @@ Deno.test("buildNip98AuthEvent - throws InvalidArgumentError when the expiration
 
 Deno.test("buildNip98AuthEvent - writes its URL as the u tag, already in the form a validator compares", () => {
   const url = httpUrlFixture("https://x.example/y?")
-  assertEquals(buildNip98AuthEvent({ url, method: "GET" }).tags.find((t) => t[0] === "u")?.[1], url)
+  assertEquals(buildNip98AuthEvent({ url, method: httpMethodFrom("GET") }).tags.find((t) => t[0] === "u")?.[1], url)
 })
 
 Deno.test("buildNip98AuthEvent - hashes a byte body, such as an uploaded file, into the payload tag", () => {
   const body = new Uint8Array([0xff, 0x00, 0xd8, 0x01])
-  const event = buildNip98AuthEvent({ url: httpUrlFixture("https://relay.example"), method: "POST", body })
+  const event = buildNip98AuthEvent({
+    url: httpUrlFixture("https://relay.example"),
+    method: httpMethodFrom("POST"),
+    body,
+  })
   assertEquals(event.tags.find((tag) => tag[0] === "payload")?.[1], sha256Hex(body))
 })
 
 Deno.test("buildNip98AuthEvent - omits the payload tag for an empty byte body", () => {
   const event = buildNip98AuthEvent({
     url: httpUrlFixture("https://relay.example"),
-    method: "POST",
+    method: httpMethodFrom("POST"),
     body: new Uint8Array(),
   })
   assertEquals(event.tags.some((tag) => tag[0] === "payload"), false)

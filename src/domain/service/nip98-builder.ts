@@ -2,6 +2,7 @@ import { KIND_HTTP_AUTH } from "../value-object/kinds.ts"
 import type { Tag, UnsignedEvent } from "../value-object/nostr-event.ts"
 import { now } from "./timestamp.ts"
 import { sha256Hex } from "./sha256.ts"
+import type { HttpMethod } from "../value-object/http-method.ts"
 import type { HttpUrl } from "../value-object/http-url.ts"
 import { lowerAscii } from "../value-object/ascii-case.ts"
 import { InvalidArgumentError } from "../exception/invalid-argument-error.ts"
@@ -13,7 +14,7 @@ import { isNonNegativeInteger } from "./guards.ts"
  */
 export interface BuildNip98AuthEventInput {
   readonly url: HttpUrl
-  readonly method: string
+  readonly method: HttpMethod
   /** Request body, text or bytes. An empty one, or none, means no `payload` tag is emitted. */
   readonly body?: string | Uint8Array
   /**

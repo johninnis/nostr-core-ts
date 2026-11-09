@@ -356,7 +356,7 @@ Deno.test("getNip44ConversationKey - a peer key that is not 64 lowercase hex cha
   assertThrows(() => getNip44ConversationKey(keyPairOf(0x11).sk, NOT_A_PUBKEY), InvalidArgumentError)
 })
 
-Deno.test("nip44Decrypt - a payload whose base64 sets its unused trailing bits throws, being no canonical encoding (shared ADR-0095)", () => {
+Deno.test("nip44Decrypt - a payload whose base64 sets its unused trailing bits throws, being no canonical encoding (shared ADR-0132)", () => {
   const conversationKey = getNip44ConversationKey(keyPairOf(0x11).sk, keyPairOf(0x22).pk)
   const payload = nip44Encrypt(conversationKey, "x".repeat(33))
   assert(payload.endsWith("="), "a 131-byte payload ends in padding")

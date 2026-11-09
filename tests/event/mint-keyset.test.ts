@@ -123,7 +123,7 @@ Deno.test("mintKeysetUrl - writes one slash after a mint written with several tr
   )
 })
 
-Deno.test("mintKeysetUrl - keeps the mint exactly as written (shared ADR-0121)", () => {
+Deno.test("mintKeysetUrl - keeps the mint exactly as written (shared ADR-0128)", () => {
   assertEquals(
     mintKeysetUrl(webUrlFixture("HTTPS://Mint.example"), KEYSET_ID),
     `HTTPS://Mint.example/v1/keys/${KEYSET_ID}`,

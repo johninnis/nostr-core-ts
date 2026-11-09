@@ -18,7 +18,7 @@ interface CashuDleqVectors {
   readonly keysResponse: unknown
 }
 
-/** The shared Cashu DLEQ vectors (shared ADR-0121). */
+/** The shared Cashu DLEQ vectors (shared ADR-0128). */
 export const CASHU_DLEQ_VECTORS: CashuDleqVectors = JSON.parse(
   await Deno.readTextFile(new URL("../event/cashu-dleq-vectors.json", import.meta.url)),
 )

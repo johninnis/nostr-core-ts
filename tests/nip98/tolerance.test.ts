@@ -1,3 +1,4 @@
+import { httpMethodFrom } from "../../src/domain/value-object/http-method.ts"
 import { assertEquals, assertThrows } from "@std/assert"
 import { createNip98Validator } from "../../src/application/service/nip98-validator.ts"
 import type { Nip98ReplayGuard } from "../../src/application/port/nip98-replay-guard.ts"
@@ -35,7 +36,7 @@ Deno.test("validate - a timestampTolerance of 0 accepts only an event created at
     (await validator.validate({
       event: await signedAuth(createdAt),
       url: httpUrlFixture("https://relay.example"),
-      method: "POST",
+      method: httpMethodFrom("POST"),
     }))
       .success
   assertEquals([await accepts(AT), await accepts(AT - 1), await accepts(AT + 1)], [true, false, false])
@@ -54,7 +55,7 @@ for (const [tolerance, window] of [[0, 1], [60, 121]]) {
     await validator.validate({
       event: await signedAuth(AT),
       url: httpUrlFixture("https://relay.example"),
-      method: "POST",
+      method: httpMethodFrom("POST"),
     })
     assertEquals(ttls, [window])
   })
@@ -76,7 +77,7 @@ for (const tolerance of [0, 60]) {
     const request = {
       event: await signedAuth(AT + tolerance),
       url: httpUrlFixture("https://relay.example"),
-      method: "POST",
+      method: httpMethodFrom("POST"),
     }
     await validator.validate(request)
     clock = AT + 2 * tolerance

@@ -154,7 +154,7 @@ export interface CashuAmount {
 
 /**
  * A Cashu proof's NUT-12 DLEQ proof as written: the challenge `e`, the response `s` and the blinding factor `r`, each
- * `null` when missing or not a string, for {@link verifyNutzapDleq}'s check against the mint's keyset (shared ADR-0121).
+ * `null` when missing or not a string, for {@link verifyNutzapDleq}'s check against the mint's keyset (shared ADR-0128).
  */
 export interface NutzapDleq {
   readonly e: string | null
@@ -164,7 +164,7 @@ export interface NutzapDleq {
 
 /**
  * One `proof` of a nutzap that states an amount (shared ADR-0080), carried whole as written for
- * {@link verifyNutzapDleq}'s check (shared ADR-0121): its keyset `id` (`keysetId`), its `amount`, its `secret`, its
+ * {@link verifyNutzapDleq}'s check (shared ADR-0128): its keyset `id` (`keysetId`), its `amount`, its `secret`, its
  * unblinded signature `C`
  * (`unblindedSignature`) and its `dleq`, each `null` when missing or mistyped, and the key its secret locks it to alone
  * (`lockKey`, an x-coordinate), or `null` when the secret locks it to no one key.
@@ -184,7 +184,7 @@ export interface NutzapProof {
  * keyset ids they name (`keysetIds`, each once, as written, in the order first named), its amount in the unit its
  * proofs state (`null` when no proof states one), its bitcoin amount in millisatoshis and in whole sats (each `null`
  * unless that unit is `sat` or `msat` and a proof states an amount), the message, and its `created_at` (shared
- * ADR-0080, shared ADR-0121). Reading verifies nothing; pass it to {@link verifyNutzap}, then to
+ * ADR-0080, shared ADR-0128). Reading verifies nothing; pass it to {@link verifyNutzap}, then to
  * {@link verifyNutzapDleq}.
  */
 export interface Nutzap {
@@ -205,7 +205,7 @@ const stringOrNull = (value: unknown): string | null => isString(value) ? value 
 const parseNutzapDleq = (dleq: unknown): NutzapDleq | null =>
   isRecord(dleq) ? { e: stringOrNull(dleq.e), s: stringOrNull(dleq.s), r: stringOrNull(dleq.r) } : null
 
-// Deliberate: the proof is carried whole as written, a field null when missing or mistyped, for the DLEQ check — see shared ADR-0121
+// Deliberate: the proof is carried whole as written, a field null when missing or mistyped, for the DLEQ check — see shared ADR-0128
 const parseNutzapProof = (proofJson: string): NutzapProof | null => {
   const proof = parseJson(proofJson)
   if (!proof.success || !isRecord(proof.value) || !isInteger(proof.value.amount)) return null
@@ -264,7 +264,7 @@ const nutzapOf = (event: NostrEvent, proofs: ReadonlyArray<NutzapProof>, cashuAm
  * that is not a JSON object with a safe integer `amount` states no amount and is skipped (shared ADR-0080, shared
  * ADR-0098); a nutzap whose proofs state none is read with no amount. Each proof read carries the key its NUT-10 P2PK
  * secret locks it to alone, and the nutzap its one `p` recipient, its one `u` mint, kept as written, and the keyset ids
- * its proofs name (shared ADR-0121). Returns `null` for another kind, for `unit` tags that disagree, for a negative
+ * its proofs name (shared ADR-0128). Returns `null` for another kind, for `unit` tags that disagree, for a negative
  * proof amount, for a sum beyond the safe integer range, and for a bitcoin amount above 1 BTC.
  */
 export const parseNutzap = (event: NostrEvent): Nutzap | null => {
@@ -286,16 +286,22 @@ export const parseNutzap = (event: NostrEvent): Nutzap | null => {
  */
 export type ListedNutzap = Nutzap & { readonly mint: WebUrl }
 
-// Deliberate: the mint is compared exactly as written, never normalised, as the recipient's #u filter matches it — see shared ADR-0121
+// Deliberate: the mint is compared exactly as written, never normalised, as the recipient's #u filter matches it — see shared ADR-0128
 const isListedIn = (nutzap: Nutzap, recipientsInfo: NutzapInfo): nutzap is ListedNutzap =>
   nutzap.mint !== null && recipientsInfo.mints.includes(nutzap.mint)
 
-// Deliberate: verifies only what the two events establish; DLEQ, which needs the mint's keysets, is verifyNutzapDleq's — see shared ADR-0121
+// Deliberate: a mint spends a proof once by its secret, so two tags naming one secret are one proof however they are spelled — see shared ADR-0131
+const repeatsASecret = (proofs: ReadonlyArray<NutzapProof>): boolean => {
+  const secrets = proofs.flatMap((proof) => proof.secret ?? [])
+  return new Set(secrets).size !== secrets.length
+}
+
+// Deliberate: verifies only what the two events establish; DLEQ, which needs the mint's keysets, is verifyNutzapDleq's — see shared ADR-0128
 /**
- * Verify a parsed nutzap against its recipient's nutzap info (NIP-61's "Verifying a Cashu Zap", shared ADR-0121),
+ * Verify a parsed nutzap against its recipient's nutzap info (NIP-61's "Verifying a Cashu Zap", shared ADR-0128),
  * checking, in this order, that the info is by the nutzap's one recipient, that it lists the nutzap's mint exactly as
- * written, that the nutzap has a proof that states an amount, and that every proof is locked to the info's P2PK key
- * alone. Pure: neither event's signature is checked, both being events the host verifies before reading, and the DLEQ
+ * written, that the nutzap has a proof that states an amount, that every proof is locked to the info's P2PK key
+ * alone, and that no two proofs name one secret. Pure: neither event's signature is checked, both being events the host verifies before reading, and the DLEQ
  * check, which needs the mint's keysets, is {@link verifyNutzapDleq}'s, made next. A verified nutzap is a
  * {@link ListedNutzap}. A nutzap that has not verified is never counted toward an amount.
  */
@@ -309,6 +315,7 @@ export const verifyNutzap = (
   if (!nutzap.proofs.every((proof) => proof.lockKey === recipientsInfo.p2pkPubkey)) {
     return failure("proof-not-locked-to-recipient")
   }
+  if (repeatsASecret(nutzap.proofs)) return failure("proof-repeated")
   return ok(nutzap)
 }
 
@@ -334,7 +341,7 @@ const withItsMintKey = ({ proof, keyset }: KeysetProof): KeyedProof | null => {
 
 /**
  * Verify a nutzap's proofs by their NUT-12 DLEQ against its mint's `keysets` (NIP-61: "locally verify the DLEQ proof of
- * the tokens being sent", shared ADR-0121), after {@link verifyNutzap} and over the proofs the read nutzap carries.
+ * the tokens being sent", shared ADR-0128), after {@link verifyNutzap} and over the proofs the read nutzap carries.
  * Checks, in this order, each over every proof before the next: that the nutzap has a proof, that every proof's keyset
  * id names a keyset given (the first with that id), that every such keyset is in the nutzap's unit, compared exactly,
  * that every such keyset has a key for the proof's amount, and that every proof's DLEQ verifies against that key as
@@ -348,7 +355,7 @@ export const verifyNutzapDleq = <T extends Nutzap>(
   if (nutzap.proofs.length === 0) return failure("no-proof")
   const keysetProofs = nutzap.proofs.flatMap((proof) => withItsKeyset(proof, keysets) ?? [])
   if (keysetProofs.length < nutzap.proofs.length) return failure("unknown-keyset")
-  // Deliberate: a keyset in another unit fails, as a unit tag misstating it would show a false amount — see shared ADR-0121
+  // Deliberate: a keyset in another unit fails, as a unit tag misstating it would show a false amount — see shared ADR-0128
   if (!keysetProofs.every(({ keyset }) => keyset.unit === nutzap.cashuAmount?.unit)) return failure("unit-mismatch")
   const keyedProofs = keysetProofs.flatMap((keysetProof) => withItsMintKey(keysetProof) ?? [])
   if (keyedProofs.length < keysetProofs.length) return failure("no-mint-key")

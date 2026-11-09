@@ -11,7 +11,7 @@ const VECTORS: P2pkLockVectors = JSON.parse(
 )
 
 Deno.test("parseP2pkLockKey - the shared vectors are fully loaded", () => {
-  assertEquals(VECTORS.vectors.length, 47)
+  assertEquals(VECTORS.vectors.length, 60)
 })
 
 Deno.test("parseP2pkLockKey - reads every shared vector's lock as the PHP P2pkSecretParser reads it", () => {
@@ -19,11 +19,11 @@ Deno.test("parseP2pkLockKey - reads every shared vector's lock as the PHP P2pkSe
   assertEquals(disagreements, [])
 })
 
-Deno.test("parseP2pkLockKey - the lock of a P2PK secret is its data key (shared ADR-0121)", () => {
+Deno.test("parseP2pkLockKey - the lock of a P2PK secret is its data key (shared ADR-0128)", () => {
   assertEquals(parseP2pkLockKey(secretFor(`02${P2PK_KEY}`)), P2PK_KEY)
 })
 
-Deno.test("parseP2pkLockKey - a secret that also lets another key spend locks to no key (shared ADR-0121)", () => {
+Deno.test("parseP2pkLockKey - a secret that also lets another key spend locks to no key (shared ADR-0128)", () => {
   const secret = JSON.stringify(["P2PK", {
     nonce: "n",
     data: `02${P2PK_KEY}`,
@@ -32,7 +32,7 @@ Deno.test("parseP2pkLockKey - a secret that also lets another key spend locks to
   assertEquals(parseP2pkLockKey(secret), null)
 })
 
-Deno.test("parseP2pkLockKey - a secret whose lock lapses locks to no key (shared ADR-0121)", () => {
+Deno.test("parseP2pkLockKey - a secret whose lock lapses locks to no key (shared ADR-0128)", () => {
   const secret = JSON.stringify(["P2PK", { nonce: "n", data: `02${P2PK_KEY}`, tags: [["locktime", "1689418329"]] }])
   assertEquals(parseP2pkLockKey(secret), null)
 })
@@ -41,11 +41,11 @@ Deno.test("parseCompressedKey - reads a compressed key as its x-coordinate", () 
   assertEquals(parseCompressedKey(`02${P2PK_KEY}`), P2PK_KEY)
 })
 
-Deno.test("parseCompressedKey - a 03 prefix is the same key, as NUT-11 compares keys (shared ADR-0121)", () => {
+Deno.test("parseCompressedKey - a 03 prefix is the same key, as NUT-11 compares keys (shared ADR-0128)", () => {
   assertEquals(parseCompressedKey(`03${P2PK_KEY}`), P2PK_KEY)
 })
 
-Deno.test("parseCompressedKey - reads upper-case hex as its lower-case x-coordinate (shared ADR-0121)", () => {
+Deno.test("parseCompressedKey - reads upper-case hex as its lower-case x-coordinate (shared ADR-0128)", () => {
   assertEquals(parseCompressedKey(`02${P2PK_KEY.toUpperCase()}`), P2PK_KEY)
 })
 

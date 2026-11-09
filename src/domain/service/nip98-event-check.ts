@@ -9,6 +9,7 @@ import type { Result } from "../value-object/result.ts"
 import { failure, ok } from "../value-object/result.ts"
 import type { Nip98ValidationFailure } from "../failure/nip98-validation-failure.ts"
 import { isEventExpired } from "./expiration.ts"
+import type { HttpMethod } from "../value-object/http-method.ts"
 import type { HttpUrl } from "../value-object/http-url.ts"
 import { parseHttpUrl } from "../value-object/http-url.ts"
 
@@ -18,14 +19,14 @@ import { parseHttpUrl } from "../value-object/http-url.ts"
  * only the scheme's and host's case, a default port and a fragment are ignored, and the path and query compare as
  * written. A `u` tag with no `HttpUrl` form, such as one that is not an absolute `http` or `https` URL or that carries
  * credentials, is `u-malformed`. The `method` tag must equal `method` exactly, since RFC 9110 method tokens are
- * case-sensitive. `bodyHash` is the SHA-256 of the body as lowercase hex, which the `payload` tag must equal exactly;
+ * case-sensitive, and `method` is parsed, so the empty string can bind nothing (shared ADR-0130). `bodyHash` is the SHA-256 of the body as lowercase hex, which the `payload` tag must equal exactly;
  * the hash of the empty body is no body, as an absent `bodyHash` is, which demands no `payload` tag and admits one only
  * when it holds that hash (shared ADR-0024).
  */
 export interface ValidateEventRequest {
   readonly event: NostrEvent
   readonly url: HttpUrl
-  readonly method: string
+  readonly method: HttpMethod
   readonly bodyHash?: string | undefined
 }
 

@@ -1,3 +1,4 @@
+import { httpMethodFrom } from "../../src/domain/value-object/http-method.ts"
 import { assertEquals } from "@std/assert"
 import { base64 } from "@scure/base"
 import { schnorr } from "@noble/curves/secp256k1"
@@ -74,7 +75,7 @@ Deno.test("validate - accepts a fresh, well-formed kind 27235 event", async () =
   const validator = createNip98Validator(guard, DEFAULT_TIMESTAMP_TOLERANCE_SECONDS, () => NOW)
   const event = await signAuth(signer, { url: "https://relay.example/management", method: "POST" })
 
-  const result = await validator.validate({ event, url: MANAGEMENT_URL, method: "POST" })
+  const result = await validator.validate({ event, url: MANAGEMENT_URL, method: httpMethodFrom("POST") })
   assertEquals(result.success, true)
   if (result.success) assertEquals(result.value, pubkey)
 })
@@ -89,7 +90,7 @@ Deno.test("validate - rejects wrong kind", async () => {
     content: "",
   })
 
-  const result = await validator.validate({ event, url: RELAY_URL, method: "POST" })
+  const result = await validator.validate({ event, url: RELAY_URL, method: httpMethodFrom("POST") })
   assertEquals(result.success, false)
   if (!result.success) assertEquals(result.error, "kind")
 })
@@ -103,7 +104,7 @@ Deno.test("validate - rejects timestamp outside tolerance", async () => {
     createdAt: NOW - 600,
   })
 
-  const result = await validator.validate({ event, url: RELAY_URL, method: "POST" })
+  const result = await validator.validate({ event, url: RELAY_URL, method: httpMethodFrom("POST") })
   assertEquals(result.success, false)
   if (!result.success) assertEquals(result.error, "timestamp")
 })
@@ -115,7 +116,7 @@ Deno.test("validate - without a timestampTolerance accepts an event 60 seconds o
     (await validator.validate({
       event: await signAuth(signer, { url: RELAY_URL, method: "POST", createdAt }),
       url: RELAY_URL,
-      method: "POST",
+      method: httpMethodFrom("POST"),
     })).success
   const tolerance = DEFAULT_TIMESTAMP_TOLERANCE_SECONDS
   assertEquals([tolerance, await at(1700000000 - tolerance), await at(1700000000 - tolerance - 1)], [60, true, false])
@@ -131,7 +132,7 @@ Deno.test("validate - rejects missing u tag", async () => {
     content: "",
   })
 
-  const result = await validator.validate({ event, url: RELAY_URL, method: "POST" })
+  const result = await validator.validate({ event, url: RELAY_URL, method: httpMethodFrom("POST") })
   assertEquals(result.success, false)
   if (!result.success) assertEquals(result.error, "u-missing")
 })
@@ -141,7 +142,7 @@ Deno.test("validate - rejects u tag URL mismatch", async () => {
   const validator = createNip98Validator(makeReplayGuard(), DEFAULT_TIMESTAMP_TOLERANCE_SECONDS, () => NOW)
   const event = await signAuth(signer, { url: "https://different.example", method: "POST" })
 
-  const result = await validator.validate({ event, url: RELAY_URL, method: "POST" })
+  const result = await validator.validate({ event, url: RELAY_URL, method: httpMethodFrom("POST") })
   assertEquals(result.success, false)
   if (!result.success) assertEquals(result.error, "u-mismatch")
 })
@@ -151,7 +152,11 @@ Deno.test("validate - accepts equivalent URLs with default-port normalisation", 
   const validator = createNip98Validator(makeReplayGuard(), DEFAULT_TIMESTAMP_TOLERANCE_SECONDS, () => NOW)
   const event = await signAuth(signer, { url: "https://relay.example:443/path", method: "POST" })
 
-  const result = await validator.validate({ event, url: httpUrlFixture("https://relay.example/path"), method: "POST" })
+  const result = await validator.validate({
+    event,
+    url: httpUrlFixture("https://relay.example/path"),
+    method: httpMethodFrom("POST"),
+  })
   assertEquals(result.success, true)
 })
 
@@ -165,7 +170,7 @@ Deno.test("validate - rejects missing method tag", async () => {
     content: "",
   })
 
-  const result = await validator.validate({ event, url: RELAY_URL, method: "POST" })
+  const result = await validator.validate({ event, url: RELAY_URL, method: httpMethodFrom("POST") })
   assertEquals(result.success, false)
   if (!result.success) assertEquals(result.error, "method-missing")
 })
@@ -175,7 +180,7 @@ Deno.test('validate - refuses a method tag in another case, since RFC 9110 says 
   const validator = createNip98Validator(makeReplayGuard(), DEFAULT_TIMESTAMP_TOLERANCE_SECONDS, () => NOW)
   const event = await signAuth(signer, { url: RELAY_URL, method: "post" })
 
-  const result = await validator.validate({ event, url: RELAY_URL, method: "POST" })
+  const result = await validator.validate({ event, url: RELAY_URL, method: httpMethodFrom("POST") })
   assertEquals(result, failure("method-mismatch"))
 })
 
@@ -185,7 +190,7 @@ Deno.test("validate - rejects missing payload tag when body hash is provided", a
   const event = await signAuth(signer, { url: RELAY_URL, method: "POST" })
   const bodyHash = sha256Hex("hello")
 
-  const result = await validator.validate({ event, url: RELAY_URL, method: "POST", bodyHash })
+  const result = await validator.validate({ event, url: RELAY_URL, method: httpMethodFrom("POST"), bodyHash })
   assertEquals(result.success, false)
   if (!result.success) assertEquals(result.error, "payload-missing")
 })
@@ -201,7 +206,7 @@ Deno.test("validate - accepts matching payload hash", async () => {
     payloadHash: bodyHash,
   })
 
-  const result = await validator.validate({ event, url: RELAY_URL, method: "POST", bodyHash })
+  const result = await validator.validate({ event, url: RELAY_URL, method: httpMethodFrom("POST"), bodyHash })
   assertEquals(result.success, true)
 })
 
@@ -216,7 +221,12 @@ Deno.test("validate - rejects payload hash mismatch", async () => {
   })
   const requestBodyHash = sha256Hex("different body")
 
-  const result = await validator.validate({ event, url: RELAY_URL, method: "POST", bodyHash: requestBodyHash })
+  const result = await validator.validate({
+    event,
+    url: RELAY_URL,
+    method: httpMethodFrom("POST"),
+    bodyHash: requestBodyHash,
+  })
   assertEquals(result.success, false)
   if (!result.success) assertEquals(result.error, "payload-mismatch")
 })
@@ -231,7 +241,7 @@ Deno.test("validate - rejects a payload tag whose hex is upper-case, since NIP-9
     payloadHash: bodyHash.toUpperCase(),
   })
 
-  const result = await validator.validate({ event, url: RELAY_URL, method: "POST", bodyHash })
+  const result = await validator.validate({ event, url: RELAY_URL, method: httpMethodFrom("POST"), bodyHash })
   assertEquals(!result.success && result.error, "payload-mismatch")
 })
 
@@ -246,7 +256,12 @@ Deno.test("validateAuthHeader - rejects a payload tag whose hex is upper-case", 
   })
   const header = "Nostr " + base64.encode(new TextEncoder().encode(JSON.stringify(event)))
 
-  const result = await validator.validateAuthHeader({ authHeader: header, url: RELAY_URL, method: "POST", body })
+  const result = await validator.validateAuthHeader({
+    authHeader: header,
+    url: RELAY_URL,
+    method: httpMethodFrom("POST"),
+    body,
+  })
   assertEquals(!result.success && result.error, "payload-mismatch")
 })
 
@@ -256,7 +271,7 @@ Deno.test("validate - rejects tampered signature", async () => {
   const event = await signAuth(signer, { url: RELAY_URL, method: "POST" })
   const tampered = { ...event, sig: sigFixture("0".repeat(128)) }
 
-  const result = await validator.validate({ event: tampered, url: RELAY_URL, method: "POST" })
+  const result = await validator.validate({ event: tampered, url: RELAY_URL, method: httpMethodFrom("POST") })
   assertEquals(result.success, false)
   if (!result.success) assertEquals(result.error, "signature")
 })
@@ -267,9 +282,9 @@ Deno.test("validate - rejects replay (same event id seen twice)", async () => {
   const validator = createNip98Validator(guard, DEFAULT_TIMESTAMP_TOLERANCE_SECONDS, () => NOW)
   const event = await signAuth(signer, { url: RELAY_URL, method: "POST" })
 
-  const first = await validator.validate({ event, url: RELAY_URL, method: "POST" })
+  const first = await validator.validate({ event, url: RELAY_URL, method: httpMethodFrom("POST") })
   assertEquals(first.success, true)
-  const second = await validator.validate({ event, url: RELAY_URL, method: "POST" })
+  const second = await validator.validate({ event, url: RELAY_URL, method: httpMethodFrom("POST") })
   assertEquals(second.success, false)
   if (!second.success) assertEquals(second.error, "replay")
 })
@@ -280,7 +295,12 @@ Deno.test("validateAuthHeader - round-trips a signed event through the Authoriza
   const event = await signAuth(signer, { url: RELAY_URL, method: "POST" })
   const header = "Nostr " + base64.encode(new TextEncoder().encode(JSON.stringify(event)))
 
-  const result = await validator.validateAuthHeader({ authHeader: header, url: RELAY_URL, method: "POST", body: "" })
+  const result = await validator.validateAuthHeader({
+    authHeader: header,
+    url: RELAY_URL,
+    method: httpMethodFrom("POST"),
+    body: "",
+  })
   assertEquals(result.success, true)
   if (result.success) assertEquals(result.value, pubkey)
 })
@@ -297,7 +317,12 @@ Deno.test("validateAuthHeader - hashes the body and matches the payload tag", as
   })
   const header = "Nostr " + base64.encode(new TextEncoder().encode(JSON.stringify(event)))
 
-  const result = await validator.validateAuthHeader({ authHeader: header, url: RELAY_URL, method: "POST", body })
+  const result = await validator.validateAuthHeader({
+    authHeader: header,
+    url: RELAY_URL,
+    method: httpMethodFrom("POST"),
+    body,
+  })
   assertEquals(result.success, true)
   if (result.success) assertEquals(result.value, pubkey)
 })
@@ -325,14 +350,14 @@ Deno.test("validateAuthHeader - reports a decode failure and a validation failur
   const decode = await validator.validateAuthHeader({
     authHeader: "Bearer x",
     url: httpUrlFixture("https://a.example"),
-    method: "GET",
+    method: httpMethodFrom("GET"),
     body: "",
   })
   const event = await signAuth(signer, { url: RELAY_URL, method: "GET" })
   const validation = await validator.validateAuthHeader({
     authHeader: headerFor(event),
     url: RELAY_URL,
-    method: "POST",
+    method: httpMethodFrom("POST"),
     body: "",
   })
   const expected: Array<AuthHeaderDecodeFailure | Nip98ValidationFailure | null> = [
@@ -351,7 +376,7 @@ Deno.test("validate - refuses an event once any of its expiration tags has passe
     method: "GET",
     expirations: [String(current + 600), String(current - 1)],
   })
-  const result = await validator.validate({ event, url: RELAY_URL, method: "GET" })
+  const result = await validator.validate({ event, url: RELAY_URL, method: httpMethodFrom("GET") })
   assertEquals(result.success ? null : result.error, "expired")
 })
 
@@ -363,7 +388,7 @@ Deno.test("validate - ignores an expiration value that is not a timestamp", asyn
     method: "GET",
     expirations: ["soon"],
   })
-  const result = await validator.validate({ event, url: RELAY_URL, method: "GET" })
+  const result = await validator.validate({ event, url: RELAY_URL, method: httpMethodFrom("GET") })
   assertEquals(result.success, true)
 })
 
@@ -377,7 +402,7 @@ const validateTags = async (
   const result = await validator.validate({
     event,
     url: httpUrlFixture("https://relay.example/x"),
-    method: "POST",
+    method: httpMethodFrom("POST"),
     bodyHash,
   })
   return result.success ? true : result.error
